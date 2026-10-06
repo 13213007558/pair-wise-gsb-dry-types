@@ -57,7 +57,9 @@ module Dry
       #
       # @api private
       def call_unsafe(hash, options = EMPTY_HASH)
-        resolve_unsafe(coerce(hash), options)
+        Recursion.apply(self, hash) do |result|
+          resolve_unsafe(coerce(hash), options, result)
+        end
       end
 
       # @param [Hash] hash
@@ -66,7 +68,9 @@ module Dry
       #
       # @api private
       def call_safe(hash, options = EMPTY_HASH)
-        resolve_safe(coerce(hash) { return yield }, options) { return yield }
+        Recursion.apply(self, hash) do |result|
+          resolve_safe(coerce(hash) { return yield }, options, result) { return yield }
+        end
       end
 
       # @param [Hash] hash
@@ -93,20 +97,31 @@ module Dry
       def try(input)
         if primitive?(input)
           success = true
-          output = {}
           result = {}
+          output = nil
 
-          input.each do |key, value|
-            k = @transform_key.(key)
-            type = @name_key_map[k]
+          Recursion.apply(self, input) do |recursive_output|
+            output = recursive_output
 
-            if type
-              key_result = type.try(value)
-              result[k] = key_result
-              output[k] = key_result.input
-              success &&= key_result.success?
-            elsif strict?
-              success = false
+            input.each do |key, value|
+              k = @transform_key.(key)
+              type = @name_key_map[k]
+
+              if type
+                key_result = type.try(value)
+
+                if key_result.is_a?(Result::Failure) &&
+                   key_result.error.is_a?(RecursiveReferenceError)
+                  failure = failure(input, key_result.error)
+                  return block_given? ? yield(failure) : failure
+                end
+
+                result[k] = key_result
+                output[k] = key_result.input
+                success &&= key_result.success?
+              elsif strict?
+                success = false
+              end
             end
           end
 
@@ -316,8 +331,7 @@ module Dry
       # @api private
       #
       # @return [Hash]
-      def resolve_unsafe(hash, options = EMPTY_HASH)
-        result = {}
+      def resolve_unsafe(hash, options = EMPTY_HASH, result = {})
 
         hash.each do |key, value|
           k = @transform_key.(key)
@@ -325,10 +339,17 @@ module Dry
 
           if type
             begin
-              result[k] = type.call_unsafe(value)
+              result[k] =
+                if Types::Recursion.lax?
+                  type.call_safe(value) { |out = value| out }
+                else
+                  type.call_unsafe(value)
+                end
             rescue ConstraintError => exception
               raise SchemaError.new(type.name, value, exception.result)
             rescue CoercionError => exception
+              raise if exception.is_a?(RecursiveReferenceError)
+
               raise SchemaError.new(type.name, value, exception.message)
             end
           elsif strict?
@@ -346,8 +367,7 @@ module Dry
       # @api private
       #
       # @return [Hash]
-      def resolve_safe(hash, options = EMPTY_HASH, &block)
-        result = {}
+      def resolve_safe(hash, options = EMPTY_HASH, result = {}, &block)
 
         hash.each do |key, value|
           k = @transform_key.(key)

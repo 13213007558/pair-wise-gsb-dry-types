@@ -118,6 +118,48 @@ module Dry
         Nominal(::Hash).map(key_type, value_type)
       end
 
+      # Build a named recursive type.
+      #
+      # @param [Symbol, String] name
+      # @param [Type, nil] type
+      # @param [Boolean, Symbol] cycles
+      #
+      # @return [Recursive]
+      def recursive_type(
+        name = Undefined,
+        type = Undefined,
+        cycles: Recursion::REJECT,
+        keep: nil,
+        definitions: EMPTY_HASH,
+        &block
+      )
+        Recursive.build(
+          name,
+          type,
+          cycles: cycles,
+          keep: keep,
+          definitions: definitions,
+          &block
+        )
+      end
+      alias_method :Recursive, :recursive_type
+
+      # Build a late bound reference to a recursive type.
+      #
+      # @param [Symbol, String] name
+      #
+      # @return [Recursive::Reference]
+      def recursive_ref(name)
+        Recursive::Reference.new(name)
+      end
+
+      alias_method :recursive, :recursive_type
+      alias_method :ref, :recursive_ref
+      alias_method :lazy_ref, :recursive_ref
+      alias_method :recursive_lazy, :recursive_ref
+      alias_method :deferred, :recursive_ref
+      alias_method :lazy, :recursive_ref
+
       # Builds a constrained nominal type accepting any value that
       # responds to given methods
       #

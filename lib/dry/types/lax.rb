@@ -20,6 +20,8 @@ module Dry
       #
       # @api public
       def call(input, &)
+        return type.call_lax(input) if type.respond_to?(:call_lax)
+
         type.call_safe(input) { |output = input| output }
       end
       alias_method :[], :call

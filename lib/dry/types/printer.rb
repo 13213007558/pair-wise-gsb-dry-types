@@ -23,6 +23,8 @@ module Dry
         Array::Member => :visit_array_member,
         Lax => :visit_lax,
         Enum => :visit_enum,
+        Recursive => :visit_recursive,
+        Recursive::Reference => :visit_recursive_ref,
         [Default, Default::Callable] => :visit_default,
         [
           Sum,
@@ -137,6 +139,16 @@ module Dry
             end
           end
         end
+      end
+
+      def visit_recursive(recursive)
+        visit(recursive.type) do |type|
+          yield "Recursive<#{recursive.name} #{type} cycles=#{recursive.cycles}>"
+        end
+      end
+
+      def visit_recursive_ref(reference)
+        yield "Recursive::Ref(#{reference.name})"
       end
 
       def visit_default(default)

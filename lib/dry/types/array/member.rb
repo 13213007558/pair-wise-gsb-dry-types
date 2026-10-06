@@ -28,10 +28,18 @@ module Dry
         # @api private
         def call_unsafe(input)
           if primitive?(input)
-            input.each_with_object([]) do |el, output|
-              coerced = member.call_unsafe(el)
+            Recursion.apply(self, input) do |output|
+              input.each do |el|
+                coerced =
+                  if Types::Recursion.lax?
+                    member.call_safe(el) { |out = el| out }
+                  else
+                    member.call_unsafe(el)
+                  end
 
-              output << coerced unless Undefined.equal?(coerced)
+                output << coerced unless Undefined.equal?(coerced)
+              end
+              output
             end
           else
             super
@@ -46,13 +54,16 @@ module Dry
           if primitive?(input)
             failed = false
 
-            result = input.each_with_object([]) do |el, output|
-              coerced = member.call_safe(el) { |out = el|
-                failed = true
-                out
-              }
+            result = Recursion.apply(self, input) do |output|
+              input.each do |el|
+                coerced = member.call_safe(el) { |out = el|
+                  failed = true
+                  out
+                }
 
-              output << coerced unless Undefined.equal?(coerced)
+                output << coerced unless Undefined.equal?(coerced)
+              end
+              output
             end
 
             failed ? yield(result) : result
@@ -72,19 +83,33 @@ module Dry
         # @api public
         def try(input, &block) # rubocop:disable Metrics/PerceivedComplexity
           if primitive?(input)
-            output = []
+            Recursion.apply(self, input) do |recursive_output|
+              array_result = begin
+                result = input.map { |el| member.try(el) }
+                recursive_failure = result.find do |r|
+                  r.is_a?(::Dry::Types::Result::Failure) &&
+                    r.error.is_a?(::Dry::Types::RecursiveReferenceError)
+                end
 
-            result = input.map { |el| member.try(el) }
-            result.each do |r|
-              output << r.input unless Undefined.equal?(r.input)
-            end
+                if recursive_failure
+                  failure(recursive_output, recursive_failure.error)
+                else
+                  result.each do |r|
+                    recursive_output << r.input unless Undefined.equal?(r.input)
+                  end
 
-            if result.all?(&:success?)
-              success(output)
-            else
-              error = result.find(&:failure?).error
-              failure = failure(output, error)
-              block ? yield(failure) : failure
+                  if result.all?(&:success?)
+                    success(recursive_output)
+                  else
+                    error = result.find(&:failure?).error
+                    failure(recursive_output, error)
+                  end
+                end
+              rescue ::Dry::Types::CircularReferenceError => exception
+                failure(recursive_output, exception)
+              end
+
+              block ? yield(array_result) : array_result
             end
           else
             failure = failure(input, CoercionError.new("#{input} is not an array"))

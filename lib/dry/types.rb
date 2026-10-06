@@ -29,6 +29,8 @@ module Dry
 
     TYPE_SPEC_REGEX = /(.+)<(.+)>/
 
+    extend BuilderMethods
+
     def self.loader
       @loader ||= ::Zeitwerk::Loader.new.tap do |loader|
         root = ::File.expand_path("..", __dir__)

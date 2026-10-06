@@ -34,7 +34,12 @@ module Dry
       #
       # @api private
       def call_unsafe(input)
-        left.call_safe(input) { right.call_unsafe(input) }
+        Types::Recursion.transaction do |transaction|
+          left.call_safe(input) do
+            Types::Recursion.rollback_transaction(transaction)
+            right.call_unsafe(input)
+          end
+        end
       end
 
       # @param [Object] input
@@ -43,19 +48,27 @@ module Dry
       #
       # @api private
       def call_safe(input, &block)
-        left.call_safe(input) { right.call_safe(input, &block) }
+        Types::Recursion.transaction do |transaction|
+          left.call_safe(input) do
+            Types::Recursion.rollback_transaction(transaction)
+            right.call_safe(input, &block)
+          end
+        end
       end
 
       # @param [Object] input
       #
       # @api public
       def try(input)
-        left.try(input) do
-          right.try(input) do |failure|
-            if block_given?
-              yield(failure)
-            else
-              failure
+        Types::Recursion.transaction do |transaction|
+          left.try(input) do
+            Types::Recursion.rollback_transaction(transaction)
+            right.try(input) do |failure|
+              if block_given?
+                yield(failure)
+              else
+                failure
+              end
             end
           end
         end

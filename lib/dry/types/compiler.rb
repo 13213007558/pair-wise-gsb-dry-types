@@ -10,6 +10,7 @@ module Dry
 
       def initialize(registry)
         @registry = registry
+        @recursive_scopes = []
       end
 
       def call(ast) = visit(ast)
@@ -116,6 +117,59 @@ module Dry
 
       def visit_any(meta)
         registry["any"].meta(meta)
+      end
+
+      def visit_recursive(node)
+        name, root, options, meta = node
+        name = name.to_sym
+        definitions = options.fetch(:definitions, EMPTY_HASH)
+        cycles = options.fetch(:cycles, Recursion::REJECT)
+        scope = {refs: {}}
+
+        @recursive_scopes.push(scope)
+
+        begin
+          compiled_definitions =
+            definitions
+              .transform_values { |definition| visit(definition) }
+              .tap do |compiled|
+                next if compiled.key?(name)
+
+                compiled[name] = visit(root)
+              end
+
+          target = compiled_definitions.fetch(name)
+
+          scope[:refs].each do |reference_name, reference|
+            bound_target = compiled_definitions.fetch(reference_name) do
+              raise RecursiveReferenceError,
+                    "recursive reference :#{reference_name} is not defined"
+            end
+
+            reference.bind(bound_target)
+          end
+        ensure
+          @recursive_scopes.pop
+        end
+
+        Recursive.new(
+          target,
+          name: name,
+          definitions: compiled_definitions,
+          cycles: Recursion.validate_strategy(cycles)
+        ).meta(meta)
+      end
+
+      def visit_recursive_ref(node)
+        name, _meta = node
+        scope = @recursive_scopes.last
+
+        if scope.nil?
+          raise RecursiveReferenceError,
+                "recursive reference :#{name} is outside of a recursive type"
+        end
+
+        scope[:refs][name.to_sym] ||= Recursive::Reference.new(name.to_sym)
       end
 
       def compile_fn(fn)

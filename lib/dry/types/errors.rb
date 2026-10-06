@@ -109,6 +109,21 @@ module Dry
       end
     end
 
+    class RecursiveReferenceError < CoercionError
+    end
+
+    class CircularReferenceError < RecursiveReferenceError
+      # @return [Symbol, String]
+      attr_reader :name
+
+      # @param [Symbol, String] name
+      # @param [Object] input
+      def initialize(name, input)
+        @name = name
+        super("circular reference :#{name} detected in #{input.inspect}")
+      end
+    end
+
     class ConstraintError < CoercionError
       # @return [String, #to_s]
       attr_reader :result
