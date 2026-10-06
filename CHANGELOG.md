@@ -9,6 +9,16 @@ and this project adheres to [Break Versioning](https://www.taoensso.com/break-ve
 
 ### Added
 
+- Add `Dry::Types::Lattice`, an exact lattice number type: values of the form
+  `start + k * step` (Rational start/step supported) restricted to an optional
+  open/closed interval. The type only validates by default and never rounds;
+  `.nearest` opts into exact snapping with configurable tie rules
+  (`:to_even`, `:up`, `:down`). Intersecting two lattice types with `&`
+  simplifies to a single lattice (LCM of steps, CRT-combined origin) and
+  emptiness is reported via `#empty?`. `.params` parses strings to exact
+  Rationals without going through Float. Also available as the
+  `Types.Lattice(...)` builder and `Coercions::Params.to_rational`.
+
 ### Changed
 
 ### Deprecated

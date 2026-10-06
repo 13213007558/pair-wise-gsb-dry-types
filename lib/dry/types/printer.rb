@@ -24,6 +24,7 @@ module Dry
         Lax => :visit_lax,
         Enum => :visit_enum,
         [Default, Default::Callable] => :visit_default,
+        Lattice => :visit_lattice,
         [
           Sum,
           Sum::Constrained,
@@ -60,6 +61,15 @@ module Dry
       end
 
       def visit_any(_) = yield "Any"
+
+      def visit_lattice(type)
+        options = []
+        options << "mode=#{type.mode}" unless type.mode == :validate
+        options << "ties=#{type.ties}" unless type.ties == :to_even
+        suffix = options.empty? ? "" : " #{options.join(" ")}"
+
+        yield "Lattice<#{type.definition}>#{suffix}"
+      end
 
       def visit_array(type)
         visit_options(EMPTY_HASH, type.meta) do |opts|

@@ -133,6 +133,36 @@ module Dry
           type.constrained(respond_to: method)
         end
       end
+
+      # Build a lattice number type: exact values of the form
+      # `start + k * step` (k in Integer), optionally bounded by an
+      # open/closed interval. The type only validates by default; use
+      # `.nearest` to opt into exact snapping.
+      #
+      # @example
+      #   Types.Lattice(start: 0, step: Rational(1, 2), min: 0, max: 10)
+      #
+      # @param [Integer, Rational, BigDecimal, Float] start lattice origin
+      # @param [Integer, Rational, BigDecimal, Float] step distance between lattice points
+      # @param [Integer, Rational, BigDecimal, Float, nil] min lower bound
+      # @param [Integer, Rational, BigDecimal, Float, nil] max upper bound
+      # @param [Boolean] min_inclusive whether the lower bound is included
+      # @param [Boolean] max_inclusive whether the upper bound is included
+      # @param [Hash] options type options (:mode, :ties, :meta, ...)
+      #
+      # @return [Dry::Types::Lattice]
+      def Lattice(start: 0, step: 1, min: nil, max: nil, min_inclusive: true, max_inclusive: true,
+                  **options)
+        Dry::Types::Lattice.of(
+          start: start,
+          step: step,
+          min: min,
+          max: max,
+          min_inclusive: min_inclusive,
+          max_inclusive: max_inclusive,
+          **options
+        )
+      end
     end
   end
 end

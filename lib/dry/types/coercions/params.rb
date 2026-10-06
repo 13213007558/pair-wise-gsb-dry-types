@@ -106,6 +106,35 @@ module Dry
           CoercionError.handle(exception, &)
         end
 
+        # Coerce to an exact Rational. Strings are parsed directly with
+        # +Kernel.Rational+ so decimal input never goes through Float
+        # ("0.3" becomes 3/10 exactly, not the binary approximation).
+        #
+        # @param [String, Numeric, Object] input
+        #
+        # @return [Rational, Object]
+        #
+        # @raise CoercionError
+        #
+        # @api public
+        def self.to_rational(input, &)
+          case input
+          when ::Rational then input
+          when ::Integer then input.to_r
+          when ::BigDecimal then input.to_r
+          when ::Float then input.to_r
+          when ::String then Rational(input)
+          else
+            if block_given?
+              yield
+            else
+              raise CoercionError, "#{input.inspect} cannot be coerced to rational"
+            end
+          end
+        rescue ::ArgumentError, ::TypeError => exception
+          CoercionError.handle(exception, &)
+        end
+
         # @param [#to_d, Object] input
         #
         # @return [BigDecimal, nil, Object]
