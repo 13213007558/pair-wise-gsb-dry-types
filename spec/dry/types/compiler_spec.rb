@@ -296,6 +296,40 @@ RSpec.describe Dry::Types::Compiler, "#call" do
     expect(type.meta).to eql(foo: :bar)
   end
 
+  it "builds a default" do
+    ast = Dry::Types["strict.integer"].default(10).to_ast
+
+    type = compiler.(ast)
+
+    expect(type).to be_a(Dry::Types::Default)
+    expect(type.call).to be(10)
+    expect(type.call(5)).to be(5)
+  end
+
+  it "builds a callable default" do
+    fn = -> _type { 10 }
+    ast = Dry::Types["strict.integer"].default(&fn).to_ast
+
+    type = compiler.(ast)
+
+    expect(type).to be_a(Dry::Types::Default::Callable)
+    expect(type.call).to be(10)
+  end
+
+  it "builds a tuple" do
+    ast = Dry::Types["nominal.array"].tuple(
+      Dry::Types["strict.string"],
+      rest: Dry::Types["strict.integer"],
+      tail: [Dry::Types["nominal.hash"]]
+    ).to_ast
+
+    type = compiler.(ast)
+
+    expect(type).to be_a(Dry::Types::Tuple)
+    expect(type.call(["cmd", 1, 2, {}])).to eql(["cmd", 1, 2, {}])
+    expect(type.try(["cmd", "x", {}]).error.index).to be(1)
+  end
+
   it "builds a enum" do
     enum = Dry::Types["strict.integer"].enum(1, 2, 3).meta(color: :red)
 

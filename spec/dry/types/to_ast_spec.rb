@@ -152,7 +152,7 @@ RSpec.describe Dry::Types, "#to_ast" do
     end
   end
 
-  context "Constructor" do
+ context "Constructor" do
     subject(:type) do
       Dry::Types::Constructor.new(Dry::Types["nominal.string"], fn: fn).meta(key: :value)
     end
@@ -161,6 +161,34 @@ RSpec.describe Dry::Types, "#to_ast" do
       expect(type.to_ast).to eql(
         [:constructor, [[:nominal, [String, {}, {key: :value}]], [:method, Kernel, :String]]]
       )
+    end
+  end
+
+  context "Default" do
+    subject(:type) { Dry::Types["strict.integer"].default(10).meta(key: :value) }
+
+    specify do
+      expect(type.to_ast).to eql(
+        [:default, [
+          [:constrained, [
+            [:nominal, [Integer, {}, {key: :value}]],
+            [:predicate, [:type?, [[:type, Integer], [:input, undefined]]]]
+          ]],
+          10,
+          false
+        ]]
+      )
+    end
+
+    context "callable" do
+      subject(:type) { Dry::Types["strict.integer"].default { 10 } }
+
+      specify do
+        _, (_, value_ast, callable) = type.to_ast
+
+        expect(callable).to be(true)
+        expect(value_ast.first).to be(:id)
+      end
     end
   end
 

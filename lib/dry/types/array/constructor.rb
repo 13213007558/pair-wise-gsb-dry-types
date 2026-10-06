@@ -18,6 +18,11 @@ module Dry
         #
         # @api public
         def of(member) = type.of(member).constructor(fn, meta: meta)
+
+        # @see Dry::Types::Array#tuple
+        #
+        # @api public
+        def tuple(*args, **) = type.tuple(*args, **).constructor(fn, meta: meta)
       end
     end
   end

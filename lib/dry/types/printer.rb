@@ -21,6 +21,7 @@ module Dry
         Map => :visit_map,
         Array => :visit_array,
         Array::Member => :visit_array_member,
+        Tuple => :visit_tuple,
         Lax => :visit_lax,
         Enum => :visit_enum,
         [Default, Default::Callable] => :visit_default,
@@ -72,6 +73,22 @@ module Dry
           visit_options(EMPTY_HASH, array.meta) do |opts|
             yield "Array<#{type}#{opts}>"
           end
+        end
+      end
+
+      def visit_tuple(tuple)
+        parts = []
+        tuple.head.each { |slot| visit(slot) { |type| parts << type } }
+
+        if tuple.rest
+          visit(tuple.rest) { |type| parts << "*#{type}" }
+        end
+
+        tuple.tail.each { |slot| visit(slot) { |type| parts << type } }
+        tuple.optional.each { |slot| visit(slot) { |type| parts << "#{type}?" } }
+
+        visit_options(EMPTY_HASH, tuple.meta) do |opts|
+          yield "Tuple<#{parts.join(", ")}#{opts}>"
         end
       end
 

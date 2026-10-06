@@ -69,6 +69,18 @@ module Dry
         registry["nominal.array"].of(member).meta(meta)
       end
 
+      def visit_tuple(node)
+        spec, meta = node
+        visit_slot = ->(slot) { slot.is_a?(::Class) ? slot : visit(slot) }
+
+        registry["nominal.array"].tuple(
+          *spec[:head].map(&visit_slot),
+          rest: spec[:rest] && visit_slot.(spec[:rest]),
+          tail: spec[:tail].map(&visit_slot),
+          optional: spec[:optional].map(&visit_slot)
+        ).meta(meta)
+      end
+
       def visit_hash(node)
         opts, meta = node
         registry["nominal.hash"].with(**opts, meta: meta)
@@ -107,6 +119,17 @@ module Dry
       def visit_enum(node)
         type, mapping = node
         Enum.new(visit(type), mapping: mapping)
+      end
+
+      def visit_default(node)
+        type, value, callable = node
+        nominal = visit(type)
+
+        if callable
+          Default::Callable.new(nominal, compile_fn(value))
+        else
+          Default.new(nominal, value)
+        end
       end
 
       def visit_map(node)

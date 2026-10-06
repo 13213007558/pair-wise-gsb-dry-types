@@ -84,6 +84,25 @@ module Dry
 
     MapError = ::Class.new(CoercionError)
 
+    # Error used by tuple types when a member fails.
+    # Keeps the index of the failing element in the input array
+    #
+    class TupleError < CoercionError
+      # @return [Integer] index of the failing element in the input array
+      attr_reader :index
+
+      # @return [#to_s] the underlying member error
+      attr_reader :error
+
+      # @param [Integer] index
+      # @param [#to_s] error
+      def initialize(index, error)
+        @index = index
+        @error = error
+        super("tuple element at index #{index}: #{error}")
+      end
+    end
+
     SchemaKeyError = ::Class.new(CoercionError)
     private_constant(:SchemaKeyError)
 
