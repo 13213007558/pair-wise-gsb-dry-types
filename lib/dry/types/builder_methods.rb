@@ -25,6 +25,10 @@ module Dry
       # @return [Dry::Types::Array]
       def Array(type) = Strict(::Array).of(type)
 
+      def Tuple(*prefix, rest: Undefined, suffix: EMPTY_ARRAY, tail: EMPTY_ARRAY)
+        Strict(::Array).tuple(*prefix, rest: rest, suffix: suffix, tail: tail)
+      end
+
       # Build a hash schema
       #
       # @param [Hash{Symbol => Dry::Types::Type}] type_map

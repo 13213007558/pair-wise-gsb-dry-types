@@ -117,14 +117,14 @@ module Dry
 
       # @param [String, #to_s] result
       # @param [Object] input
-      def initialize(result, input)
+      def initialize(result, input, meta: Undefined)
         @result = result
         @input = input
 
         if result.is_a?(::String)
-          super(result)
+          super(result, meta: meta)
         else
-          super(to_s)
+          super(to_s, meta: meta)
         end
       end
 

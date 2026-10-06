@@ -31,6 +31,26 @@ module Dry
         primitive.constructor(compile_fn(fn))
       end
 
+      def visit_default(node)
+        type, value, meta = node
+        base_type = visit(type)
+        typed_default =
+          if value.is_a?(::Array) && value[0] == :value
+            base_type.default(value[1])
+          elsif value.is_a?(::Array) && value[0] == :callable_default
+            nullary = value[1][0]
+            fn_ast = value[1][1]
+            default_fn = compile_fn(fn_ast)
+            base_type.default do
+              nullary ? default_fn.call : default_fn.call(base_type)
+            end
+          else
+            base_type.default(value)
+          end
+
+        meta.empty? ? typed_default : typed_default.meta(meta)
+      end
+
       def visit_lax(node)
         Types::Lax.new(visit(node))
       end
@@ -67,6 +87,18 @@ module Dry
         member, meta = node
         member = visit(member) unless member.is_a?(::Class)
         registry["nominal.array"].of(member).meta(meta)
+      end
+
+      def visit_tuple(node)
+        prefix, rest, suffix, tail, meta = node
+        suffix_types = suffix
+        tail_types = tail
+        registry["nominal.array"].tuple(
+          *prefix.map { |type| visit(type) },
+          rest: rest ? visit(rest) : Undefined,
+          suffix: suffix_types.map { |type| visit(type) },
+          tail: tail_types.map { |type| visit(type) }
+        ).meta(meta)
       end
 
       def visit_hash(node)

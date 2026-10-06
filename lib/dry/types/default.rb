@@ -26,6 +26,7 @@ module Dry
       include Decorator
       include Builder
       include Printable
+      include Meta
       include ::Dry::Equalizer(:type, :value, inspect: false, immutable: true)
 
       # @return [Object]
@@ -53,6 +54,7 @@ module Dry
       def initialize(type, value, **)
         super
         @value = value
+        @meta = type.meta.freeze if @meta.empty? && !type.meta.empty?
       end
 
       # Build a constrained type
@@ -117,6 +119,29 @@ module Dry
       #
       # @api private
       def callable? = false
+
+      # @see Nominal#to_ast
+      #
+      # @api public
+      def to_ast(meta: true)
+        [:default, [type.to_ast(meta: meta), default_ast, meta ? self.meta : EMPTY_HASH]]
+      end
+
+      private
+
+      def default_ast
+        case value
+        when ::Method
+          [
+            :callable_default,
+            [value.parameters.empty?, [:method, value.receiver, value.name]]
+          ]
+        when ::Proc
+          [:callable_default, [value.parameters.empty?, [:callable, value]]]
+        when ::Object
+          value.respond_to?(:to_ast) ? value.to_ast : [:value, value]
+        end
+      end
     end
   end
 end
