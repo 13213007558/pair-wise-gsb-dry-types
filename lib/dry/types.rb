@@ -149,6 +149,21 @@ module Dry
       Types::Inflector.underscore(klass).tr("/", ".")
     end
 
+    # Build a named recursive type with lazy references.
+    #
+    # @return [Types::Recursive]
+    #
+    # @api public
+    def self.recursive(names, root = nil, on_cycle: :reject, &block)
+      Types::Recursive.build(names, root, on_cycle: on_cycle, &block)
+    end
+
+    class << self
+      alias_method :Recursive, :recursive
+      alias_method :recursion, :recursive
+      alias_method :Recursion, :recursive
+    end
+
     # Cached type map
     #
     # @return [Concurrent::Map]

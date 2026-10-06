@@ -57,7 +57,23 @@ module Dry
       #
       # @api private
       def call_unsafe(hash, options = EMPTY_HASH)
-        resolve_unsafe(coerce(hash), options)
+        graph = GraphContext.current
+
+        unless primitive?(hash)
+          return super
+        end
+
+        return resolve_unsafe(hash, options) unless graph
+
+        graph.resolve(self, hash, safe: false) do
+          output = {}
+          graph.begin(hash, output)
+          resolve_unsafe(hash, options, output)
+          graph.commit(self, hash, output)
+          output
+        ensure
+          graph.finish(hash)
+        end
       end
 
       # @param [Hash] hash
@@ -66,7 +82,23 @@ module Dry
       #
       # @api private
       def call_safe(hash, options = EMPTY_HASH)
-        resolve_safe(coerce(hash) { return yield }, options) { return yield }
+        graph = GraphContext.current
+
+        unless primitive?(hash)
+          return yield
+        end
+
+        return resolve_safe(hash, options) { return yield } unless graph
+
+        graph.resolve(self, hash, safe: true) do
+          output = {}
+          graph.begin(hash, output)
+          resolve_safe(hash, options, output) { return yield }
+          graph.commit(self, hash, output)
+          output
+        ensure
+          graph.finish(hash)
+        end
       end
 
       # @param [Hash] hash
@@ -316,9 +348,7 @@ module Dry
       # @api private
       #
       # @return [Hash]
-      def resolve_unsafe(hash, options = EMPTY_HASH)
-        result = {}
-
+      def resolve_unsafe(hash, options = EMPTY_HASH, result = {})
         hash.each do |key, value|
           k = @transform_key.(key)
           type = @name_key_map[k]
@@ -328,6 +358,8 @@ module Dry
               result[k] = type.call_unsafe(value)
             rescue ConstraintError => exception
               raise SchemaError.new(type.name, value, exception.result)
+            rescue RecursiveValueError
+              raise
             rescue CoercionError => exception
               raise SchemaError.new(type.name, value, exception.message)
             end
@@ -346,9 +378,7 @@ module Dry
       # @api private
       #
       # @return [Hash]
-      def resolve_safe(hash, options = EMPTY_HASH, &block)
-        result = {}
-
+      def resolve_safe(hash, options = EMPTY_HASH, result = {}, &block)
         hash.each do |key, value|
           k = @transform_key.(key)
           type = @name_key_map[k]

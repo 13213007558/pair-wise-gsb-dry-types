@@ -32,6 +32,8 @@ module Dry
           Implication,
           Implication::Constrained
         ] => :visit_composition,
+        Recursive => :visit_recursive,
+        Recursive::Reference => :visit_recursive_reference,
         Any.class => :visit_any
       }.flat_map { |k, v| Array(k).map { |kk| [kk, v] } }.to_h
 
@@ -60,6 +62,16 @@ module Dry
       end
 
       def visit_any(_) = yield "Any"
+
+      def visit_recursive(recursive)
+        visit(recursive.type) do |type|
+          yield "Recursive(#{recursive.root}: #{type})"
+        end
+      end
+
+      def visit_recursive_reference(reference)
+        yield "Recursive(#{reference.reference_name})"
+      end
 
       def visit_array(type)
         visit_options(EMPTY_HASH, type.meta) do |opts|

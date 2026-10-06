@@ -43,6 +43,16 @@ module Dry
       end
     end
 
+    # Raised by recursive types configured to reject cyclic input
+    class RecursiveValueError < CoercionError
+      def initialize(input)
+        @input = input
+        super("#{input.inspect} contains a recursive cycle")
+      end
+
+      attr_reader :input
+    end
+
     # Collection of multiple errors
     #
     class MultipleError < CoercionError

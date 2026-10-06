@@ -32,6 +32,17 @@ module Dry
         def visit_lax(node) = visit(node)
 
         # @api private
+        def visit_recursive(node)
+          body = node[0].is_a?(::Hash) ? node[0].values.first : node[1]
+          visit(body)
+        end
+        alias_method :visit_recursion, :visit_recursive
+
+        # @api private
+        def visit_reference(_node) = ::Object
+        alias_method :visit_ref, :visit_reference
+
+        # @api private
         def visit_constructor(node) = visit(node[0])
 
         # @api private

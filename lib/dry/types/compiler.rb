@@ -10,6 +10,7 @@ module Dry
 
       def initialize(registry)
         @registry = registry
+        @recursion_scopes = []
       end
 
       def call(ast) = visit(ast)
@@ -118,6 +119,45 @@ module Dry
         registry["any"].meta(meta)
       end
 
+      def visit_recursive(node)
+        names, root, policy, meta = expand_recursive_node(node)
+        references = names.each_with_object({}) do |(name, ast), result|
+          result[name] = [ast, Types::Recursive::Reference.new(name)]
+        end
+
+        @recursion_scopes.push(references.transform_values { |_ast, reference| reference })
+        begin
+          bodies = references.transform_values { |ast, _reference| visit(ast) }
+        ensure
+          @recursion_scopes.pop
+        end
+
+        root_name = root || bodies.keys.first
+        raise ::ArgumentError, "unknown recursive root #{root_name.inspect}" unless bodies.key?(root_name)
+
+        Types::Recursive::Reference.bind(references.values.map(&:last), bodies)
+        Types::Recursive.new(
+          bodies.fetch(root_name),
+          root: root_name,
+          names: bodies.keys,
+          on_cycle: policy,
+          bindings: bodies
+        ).meta(meta)
+      end
+      alias_method :visit_recursion, :visit_recursive
+
+      def visit_reference(node)
+        name, meta = node
+        scope = @recursion_scopes.reverse.find { |bindings| bindings.key?(name) }
+
+        if scope.nil?
+          raise ::KeyError, "unresolved recursive type reference #{name.inspect}"
+        end
+
+        scope.fetch(name).meta(meta)
+      end
+      alias_method :visit_ref, :visit_reference
+
       def compile_fn(fn)
         type, *node = fn
 
@@ -131,6 +171,18 @@ module Dry
           target.method(method)
         else
           raise ::ArgumentError, "Cannot build callable from #{fn.inspect}"
+        end
+      end
+
+      private
+
+      def expand_recursive_node(node)
+        case node[0]
+        when ::Hash
+          [node[0], node[1], node.fetch(2, :reject), node.fetch(3, EMPTY_HASH)]
+        else
+          name = node[0]
+          [{name => node[1]}, name, node.fetch(2, :reject), node.fetch(3, EMPTY_HASH)]
         end
       end
     end

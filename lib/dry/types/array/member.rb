@@ -28,10 +28,20 @@ module Dry
         # @api private
         def call_unsafe(input)
           if primitive?(input)
-            input.each_with_object([]) do |el, output|
-              coerced = member.call_unsafe(el)
+            graph = GraphContext.current
+            return coerce_unsafe(input) unless graph
 
-              output << coerced unless Undefined.equal?(coerced)
+            graph.resolve(self, input, safe: false) do
+              output = []
+              graph.begin(input, output)
+              input.each do |el|
+                coerced = member.call_unsafe(el)
+                output << coerced unless Undefined.equal?(coerced)
+              end
+              graph.commit(self, input, output)
+              output
+            ensure
+              graph.finish(input)
             end
           else
             super
@@ -44,18 +54,26 @@ module Dry
         # @api private
         def call_safe(input)
           if primitive?(input)
-            failed = false
+            graph = GraphContext.current
+            return coerce_safe(input) { |output| yield(output) } unless graph
 
-            result = input.each_with_object([]) do |el, output|
-              coerced = member.call_safe(el) { |out = el|
-                failed = true
-                out
-              }
+            graph.resolve(self, input, safe: true) do
+              output = []
+              graph.begin(input, output)
 
-              output << coerced unless Undefined.equal?(coerced)
+              input.each do |el|
+                coerced = member.call_safe(el) { |out = el|
+                  return yield(out)
+                }
+
+                output << coerced unless Undefined.equal?(coerced)
+              end
+
+              graph.commit(self, input, output)
+              output
+            ensure
+              graph.finish(input)
             end
-
-            failed ? yield(result) : result
           else
             yield
           end
@@ -112,6 +130,30 @@ module Dry
 
         # @api private
         def constructor_type = ::Dry::Types::Array::Constructor
+
+        private
+
+        def coerce_unsafe(input)
+          input.each_with_object([]) do |el, output|
+            coerced = member.call_unsafe(el)
+            output << coerced unless Undefined.equal?(coerced)
+          end
+        end
+
+        def coerce_safe(input)
+          failed = false
+
+          result = input.each_with_object([]) do |el, output|
+            coerced = member.call_safe(el) { |out = el|
+              failed = true
+              out
+            }
+
+            output << coerced unless Undefined.equal?(coerced)
+          end
+
+          failed ? yield(result) : result
+        end
       end
     end
   end
