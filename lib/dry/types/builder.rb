@@ -34,7 +34,13 @@ module Dry
       # @return [Intersection, Intersection::Constrained]
       #
       # @api private
-      def &(other) = compose(other, Intersection)
+      def &(other)
+        if is_a?(LatticeNumber) && other.is_a?(LatticeNumber)
+          intersect(other)
+        else
+          compose(other, Intersection)
+        end
+      end
 
       # Compose two types into an Implication type
       #

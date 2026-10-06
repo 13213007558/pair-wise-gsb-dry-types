@@ -125,6 +125,20 @@ module Dry
           input.to_d
         end
 
+        # @param [String, Numeric, Object] input
+        #
+        # @return [Rational, Object]
+        #
+        # Strings are parsed exactly, without going through Float, so that
+        # "0.1" becomes 1/10 instead of 3602879701896397/36028797018963968.
+        #
+        # @raise CoercionError
+        #
+        # @api public
+        def self.to_rational(input, &)
+          Coercions.to_rational(input, &)
+        end
+
         # @param [Array, String, Object] input
         #
         # @return [Array, Object]

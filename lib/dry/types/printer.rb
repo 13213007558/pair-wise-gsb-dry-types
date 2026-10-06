@@ -32,6 +32,7 @@ module Dry
           Implication,
           Implication::Constrained
         ] => :visit_composition,
+        [LatticeNumber, LatticeNumber::Empty] => :visit_lattice_number,
         Any.class => :visit_any
       }.flat_map { |k, v| Array(k).map { |kk| [kk, v] } }.to_h
 
@@ -60,6 +61,16 @@ module Dry
       end
 
       def visit_any(_) = yield "Any"
+
+      def visit_lattice_number(type)
+        return yield "LatticeEmpty" if type.is_a?(LatticeNumber::Empty)
+
+        visit_options(type.options, type.meta) do |opts|
+          interval = bounds_suffix(type)
+          mode = type.rounding ? " nearest(#{type.tie})" : EMPTY_STRING
+          yield "Lattice(#{type.origin} + k*#{type.step}#{interval}#{mode}#{opts})"
+        end
+      end
 
       def visit_array(type)
         visit_options(EMPTY_HASH, type.meta) do |opts|
@@ -303,6 +314,16 @@ module Dry
             yield "#{opts} meta={#{values.join(", ")}}"
           end
         end
+      end
+
+      private
+
+      def bounds_suffix(type)
+        return EMPTY_STRING if type.lower_bound.nil?
+
+        left = type.exclude_begin ? "(" : "["
+        right = type.exclude_end ? ")" : "]"
+        " #{left}#{type.lower_bound}, #{type.upper_bound}#{right}"
       end
     end
 

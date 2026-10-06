@@ -16,6 +16,7 @@ module Dry
       "integer" => :to_int,
       "float" => :to_float,
       "decimal" => :to_decimal,
+      "rational" => :to_rational,
       "array" => :to_ary,
       "hash" => :to_hash,
       "symbol" => :to_symbol
@@ -30,6 +31,8 @@ module Dry
     end
 
     register("params.string", self["string"].with(**options))
+
+    register("optional.params.rational", self["params.nil"] | self["params.rational"])
 
     COERCIBLE.each_key do |name|
       register("optional.params.#{name}", self["params.nil"] | self["params.#{name}"])

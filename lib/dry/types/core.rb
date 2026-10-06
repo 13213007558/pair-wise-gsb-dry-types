@@ -34,9 +34,14 @@ module Dry
       range: Range
     }.freeze
 
+    # Lattice members and exact arithmetic values
+    RATIONAL_PRIMITIVES = {
+      rational: Rational
+    }.freeze
+
     # All built-in primitives
     ALL_PRIMITIVES = [
-      KERNEL_COERCIBLE, METHOD_COERCIBLE, NON_COERCIBLE
+      KERNEL_COERCIBLE, METHOD_COERCIBLE, NON_COERCIBLE, RATIONAL_PRIMITIVES
     ].reduce(&:merge).freeze
 
     # All coercible types
@@ -98,9 +103,15 @@ module Dry
     register("any", Any)
     register("nominal.any", Any)
     register("strict.any", Any)
+
+    # Lattice (discrete arithmetic progression) number types
+    register("nominal.lattice_number", LatticeNumber.new(0, 1))
+    register("lattice_number", self["nominal.lattice_number"])
+    register("strict.lattice_number", self["nominal.lattice_number"])
   end
 end
 
 require "dry/types/coercions"
+require "dry/types/lattice_number"
 require "dry/types/params"
 require "dry/types/json"

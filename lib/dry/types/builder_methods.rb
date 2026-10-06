@@ -104,6 +104,27 @@ module Dry
         end
       end
 
+      # Build a lattice number type.
+      #
+      # Members are numbers of the form +origin + k * step+ restricted by an
+      # optional open/closed interval. Origin and step are stored as Rational
+      # values, so no precision is lost through Float.
+      #
+      # @example every non-negative half-integer
+      #   Types.Lattice(0, 1r/2, range: 0..)
+      #
+      # @example rounding to the nearest point instead of validating
+      #   Types.Lattice(0, 5, rounding: :nearest, tie: :up)
+      #
+      # @param [Numeric, String] origin
+      # @param [Numeric, String] step
+      # @param [Hash] options passed to {LatticeNumber#initialize}
+      #
+      # @return [LatticeNumber]
+      def Lattice(origin = 0, step = 1, **options)
+        LatticeNumber.new(origin, step, **options)
+      end
+
       # Build a map type
       #
       # @example

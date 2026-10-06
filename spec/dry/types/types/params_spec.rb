@@ -197,6 +197,50 @@ RSpec.describe Dry::Types::Nominal do
     end
   end
 
+  describe "params.rational" do
+    subject(:type) { Dry::Types["params.rational"] }
+
+    it_behaves_like "a constrained type", inputs: [
+      Object.new, "foo", "23asf", {}, ""
+    ]
+
+    it "coerces a fraction string exactly" do
+      expect(type["1/3"]).to eql(1r/3)
+    end
+
+    it "coerces a decimal string without going through Float" do
+      expect(type["0.1"]).to eql(1r/10)
+      expect(type["0.1"]).not_to eql(0.1.to_r)
+    end
+
+    it "coerces scientific notation exactly" do
+      expect(type["1.23e2"]).to eql(123r)
+      expect(type["1.23e-2"]).to eql(123r/10000)
+    end
+
+    it "accepts numeric values" do
+      expect(type[7]).to eql(7r)
+      expect(type[1r/4]).to eql(1r/4)
+    end
+
+    it "returns a Rational" do
+      expect(type["0.5"]).to be_a(Rational)
+    end
+  end
+
+  describe "optional.params.rational" do
+    subject(:type) { Dry::Types["optional.params.rational"] }
+
+    it "coerces empty strings and nil to nil" do
+      expect(type[""]).to be(nil)
+      expect(type[nil]).to be(nil)
+    end
+
+    it "coerces exact fractions otherwise" do
+      expect(type["2/7"]).to eql(2r/7)
+    end
+  end
+
   describe "params.array" do
     subject(:type) { Dry::Types["params.array"].of(Dry::Types["params.integer"]) }
 
