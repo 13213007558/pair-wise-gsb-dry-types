@@ -49,6 +49,16 @@ module Dry
       def try(input, &) = super(map_value(input))
 
       # @api private
+      def decode_unsafe(input)
+        call_unsafe(input)
+      end
+
+      # @api private
+      def encode_unsafe(input)
+        mapping.fetch(input, input)
+      end
+
+      # @api private
       def default(*)
         raise ".enum(*values).default(value) is not supported. Call " \
               ".default(value).enum(*values) instead"

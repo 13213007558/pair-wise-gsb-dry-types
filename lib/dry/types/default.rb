@@ -113,6 +113,15 @@ module Dry
         end
       end
 
+      # @api private
+      def encode_unsafe(input = Undefined)
+        if input.equal?(Undefined)
+          type.encode_unsafe(evaluate)
+        else
+          type.encode_unsafe(input)
+        end
+      end
+
       # @return [false]
       #
       # @api private

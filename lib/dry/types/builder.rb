@@ -18,6 +18,11 @@ module Dry
       # @api private
       def constructor_type = Constructor
 
+      # @return [Class]
+      #
+      # @api private
+      def codec_type = Codec
+
       # Compose two types into a Sum type
       #
       # @param [Type] other
@@ -158,6 +163,19 @@ module Dry
       alias_method :prepend, :constructor
       alias_method :>>, :constructor
       alias_method :<<, :constructor
+
+      # Define explicit decode and encode functions
+      #
+      # @param [#call,nil] decoder
+      # @param [#call,nil] encoder
+      # @param [Hash] options
+      #
+      # @return [Codec]
+      #
+      # @api public
+      def codec(decoder = nil, encoder = nil, **options, &block)
+        codec_type.new(with(**options), decoder, encoder || block)
+      end
 
       # Use the given value on type mismatch
       #

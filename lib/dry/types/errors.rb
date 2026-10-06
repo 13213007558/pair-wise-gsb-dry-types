@@ -82,6 +82,60 @@ module Dry
       end
     end
 
+    class CodecError < CoercionError
+      # @return [Symbol]
+      attr_reader :direction
+
+      # @return [Array]
+      attr_reader :path
+
+      # @return [String]
+      attr_reader :detail
+
+      # @param [String] message
+      # @param [Symbol] direction
+      # @param [Array] path
+      def initialize(message, direction:, path: EMPTY_ARRAY)
+        @direction = direction
+        @path = path
+        @detail = message
+
+        super("#{direction} failed at #{self.class.format_path(path)}: #{message}")
+      end
+
+      # @param [Symbol, Integer] segment
+      #
+      # @return [CodecError]
+      def prepend_path(segment)
+        self.class.new(detail, path: [segment, *path])
+      end
+
+      # @param [Array] path
+      #
+      # @return [String]
+      def self.format_path(path)
+        path.reduce("$") do |location, segment|
+          if segment.is_a?(::Integer)
+            "#{location}[#{segment}]"
+          else
+            "#{location}.#{segment}"
+          end
+        end
+      end
+    end
+
+    class DecodingError < CodecError
+      def initialize(message, path: EMPTY_ARRAY)
+        super(message, direction: :decode, path: path)
+      end
+    end
+
+    class EncodingError < CodecError
+      def initialize(message, path: EMPTY_ARRAY)
+        super(message, direction: :encode, path: path)
+      end
+    end
+
     MapError = ::Class.new(CoercionError)
 
     SchemaKeyError = ::Class.new(CoercionError)

@@ -48,6 +48,34 @@ module Dry
         # @api public
         def try(input, &) = type.try(input, &)
 
+        # @api private
+        def decode_unsafe(input)
+          type.decode_unsafe(input)
+        rescue CodecError => error
+          raise error.prepend_path(name)
+        end
+
+        # @api private
+        def encode_unsafe(input)
+          type.encode_unsafe(input)
+        rescue CodecError => error
+          raise error.prepend_path(name)
+        end
+
+        # @api private
+        def decode_safe(input)
+          decode_unsafe(input)
+        rescue CodecError => error
+          yield(error)
+        end
+
+        # @api private
+        def encode_safe(input)
+          encode_unsafe(input)
+        rescue CodecError => error
+          yield(error)
+        end
+
         # Whether the key is required in schema input
         #
         # @return [Boolean]

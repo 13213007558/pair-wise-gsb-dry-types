@@ -92,6 +92,51 @@ module Dry
           end
         end
 
+        # @return [Boolean]
+        #
+        # @api public
+        def encodable? = member.encodable?
+
+        # @api private
+        def decode_unsafe(input)
+          unless primitive?(input)
+            raise DecodingError.new("#{input.inspect} must be an array")
+          end
+
+          input.each_with_index.map do |element, index|
+            member.decode_unsafe(element)
+          rescue CodecError => error
+            raise error.prepend_path(index)
+          end
+        end
+
+        # @api private
+        def encode_unsafe(input)
+          unless primitive?(input)
+            raise EncodingError.new("#{input.inspect} must be an array")
+          end
+
+          input.each_with_index.map do |element, index|
+            member.encode_unsafe(element)
+          rescue CodecError => error
+            raise error.prepend_path(index)
+          end
+        end
+
+        # @api private
+        def decode_safe(input)
+          decode_unsafe(input)
+        rescue CodecError => error
+          yield(error)
+        end
+
+        # @api private
+        def encode_safe(input)
+          encode_unsafe(input)
+        rescue CodecError => error
+          yield(error)
+        end
+
         # Build a lax type
         #
         # @return [Lax]

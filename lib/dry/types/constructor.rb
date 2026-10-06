@@ -95,6 +95,23 @@ module Dry
         type.try(value, &)
       end
 
+      # @return [false]
+      #
+      # @api public
+      def encodable? = false
+
+      # @api private
+      def encode_unsafe(input)
+        raise EncodingError.new("type has no encoder (register an explicit encoder with Codec)")
+      end
+
+      # @api private
+      def encode_safe(input)
+        encode_unsafe(input)
+      rescue CodecError => error
+        yield(error)
+      end
+
       # Build a new constructor by appending a block to the coercion function
       #
       # @param [#call, nil] new_fn

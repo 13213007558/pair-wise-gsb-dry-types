@@ -162,6 +162,96 @@ module Dry
         options.fetch(:strict, false)
       end
 
+      # @return [Boolean]
+      #
+      # @api public
+      def encodable?
+        keys.all? { |key| key.type.encodable? }
+      end
+
+      # @api private
+      def decode_unsafe(hash, options = EMPTY_HASH)
+        unless primitive?(hash)
+          raise DecodingError.new("#{hash.inspect} must be a hash")
+        end
+
+        result = {}
+
+        hash.each do |key, value|
+          transformed_key = @transform_key.(key)
+          type = @name_key_map[transformed_key]
+
+          if type
+            result[transformed_key] = type.decode_unsafe(value)
+          elsif strict?
+            raise decode_error(unexpected_keys(hash.keys))
+          end
+        end
+
+        resolve_decode_missing_keys(result, options)
+        result
+      end
+
+      # @api private
+      def decode_safe(hash, options = EMPTY_HASH)
+        decode_unsafe(hash, options)
+      rescue CodecError => error
+        yield(error)
+      end
+
+      # @api private
+      def encode_unsafe(hash, options = EMPTY_HASH)
+        unless primitive?(hash)
+          raise EncodingError.new("#{hash.inspect} must be a hash")
+        end
+
+        result = {}
+
+        keys.each do |key|
+          next unless hash.key?(key.name)
+
+          result[key.name] = key.encode_unsafe(hash.fetch(key.name))
+        end
+
+        resolve_encode_missing_keys(result, options)
+        result
+      end
+
+      # @api private
+      def encode_safe(hash, options = EMPTY_HASH)
+        encode_unsafe(hash, options)
+      rescue CodecError => error
+        yield(error)
+      end
+
+      # @api private
+      def decode_error(error)
+        return error if error.is_a?(CodecError)
+
+        path = error.is_a?(MissingKeyError) ? [error.key] : EMPTY_ARRAY
+
+        DecodingError.new(error.message, path: path)
+      end
+
+      # @api private
+      def encode_error(error)
+        return error if error.is_a?(CodecError)
+
+        path = error.is_a?(MissingKeyError) ? [error.key] : EMPTY_ARRAY
+
+        EncodingError.new(error.message, path: path)
+      end
+
+      # @api private
+      def resolve_encode_missing_keys(hash, options)
+        resolve_missing_keys(hash, options, error_transform: method(:encode_error))
+      end
+
+      # @api private
+      def resolve_decode_missing_keys(hash, options)
+        resolve_missing_keys(hash, options, error_transform: method(:decode_error))
+      end
+
       # Make the schema intolerant to unknown keys
       #
       # @return [Schema]
@@ -368,7 +458,7 @@ module Dry
       # Try to add missing keys to the hash
       #
       # @api private
-      def resolve_missing_keys(hash, options) # rubocop:disable Metrics/PerceivedComplexity
+      def resolve_missing_keys(hash, options, error_transform: nil) # rubocop:disable Metrics/PerceivedComplexity
         skip_missing = options.fetch(:skip_missing, false)
         resolve_defaults = options.fetch(:resolve_defaults, true)
 
@@ -378,10 +468,14 @@ module Dry
           if key.default? && resolve_defaults
             hash[key.name] = key.call_unsafe(Undefined)
           elsif key.required? && !skip_missing
-            if block_given?
+            if error_transform
+              error = missing_key(key.name)
+              raise error_transform.call(error)
+            elsif block_given?
               return yield
             else
-              raise missing_key(key.name)
+              error = missing_key(key.name)
+              raise error
             end
           end
         end

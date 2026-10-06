@@ -94,6 +94,17 @@ module Dry
       # @api public
       def try(input, &) = success(input)
 
+      # @return [true]
+      #
+      # @api public
+      def encodable? = true
+
+      # @api private
+      def encode_unsafe(input) = input
+
+      # @api private
+      def encode_safe(input, &) = input
+
       # @param (see Dry::Types::Success#initialize)
       #
       # @return [Result::Success]

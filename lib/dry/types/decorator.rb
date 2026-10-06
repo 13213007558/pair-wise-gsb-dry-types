@@ -26,6 +26,21 @@ module Dry
       # @api public
       def try(input, &) = type.try(input, &)
 
+      # @api public
+      def encodable? = type.encodable?
+
+      # @api private
+      def decode_unsafe(input) = type.decode_unsafe(input)
+
+      # @api private
+      def decode_safe(input, &block) = type.decode_safe(input, &block)
+
+      # @api private
+      def encode_unsafe(input) = type.encode_unsafe(input)
+
+      # @api private
+      def encode_safe(input, &block) = type.encode_safe(input, &block)
+
       # @return [Boolean]
       #
       # @api public

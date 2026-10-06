@@ -61,6 +61,45 @@ module Dry
         end
       end
 
+      # @return [Boolean]
+      #
+      # @api public
+      def encodable?
+        left.encodable? || right.encodable?
+      end
+
+      # @api private
+      def decode_unsafe(input)
+        left.decode_safe(input) do
+          right.decode_safe(input) do |right_error|
+            raise codec_failure(:decode, input, right_error)
+          end
+        end
+      end
+
+      # @api private
+      def encode_unsafe(input)
+        left.encode_safe(input) do
+          right.encode_safe(input) do |right_error|
+            raise codec_failure(:encode, input, right_error)
+          end
+        end
+      end
+
+      # @api private
+      def decode_safe(input)
+        decode_unsafe(input)
+      rescue CodecError => error
+        yield(error)
+      end
+
+      # @api private
+      def encode_safe(input)
+        encode_unsafe(input)
+      rescue CodecError => error
+        yield(error)
+      end
+
       # @param [Object] value
       #
       # @return [Boolean]
@@ -98,6 +137,19 @@ module Dry
           right.constrained(...).optional
         else
           super
+        end
+      end
+
+      private
+
+      # @api private
+      def codec_failure(direction, input, error)
+        error_class = direction == :decode ? DecodingError : EncodingError
+
+        if error.is_a?(CodecError)
+          error
+        else
+          error_class.new("#{input.inspect} matches neither #{left.inspect} nor #{right.inspect}")
         end
       end
     end

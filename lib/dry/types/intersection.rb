@@ -43,6 +43,35 @@ module Dry
         end
       end
 
+      # @return [Boolean]
+      #
+      # @api public
+      def encodable?
+        left.encodable? && right.encodable?
+      end
+
+      # @api private
+      def decode_unsafe(input) = call_unsafe(input)
+
+      # @api private
+      def encode_unsafe(input)
+        merge_results(left.encode_unsafe(input), right.encode_unsafe(input))
+      end
+
+      # @api private
+      def decode_safe(input)
+        decode_unsafe(input)
+      rescue CodecError => error
+        yield(error)
+      end
+
+      # @api private
+      def encode_safe(input)
+        encode_unsafe(input)
+      rescue CodecError => error
+        yield(error)
+      end
+
       # @param [Object] value
       #
       # @return [Boolean]

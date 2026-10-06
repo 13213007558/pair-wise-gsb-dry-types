@@ -11,6 +11,7 @@ module Dry
       MAPPING = {
         Nominal => :visit_nominal,
         Constructor => :visit_constructor,
+        Codec => :visit_codec,
         [
           Constrained,
           Constrained::Coercible
@@ -84,6 +85,14 @@ module Dry
             visit_options(options) do |opts|
               yield "Constructor<#{type} fn=#{fn}#{opts}>"
             end
+          end
+        end
+      end
+
+      def visit_codec(codec)
+        visit(codec.type) do |type|
+          visit_options(codec.options, codec.meta) do |opts|
+            yield "Codec<#{type} decode=#{!codec.decoder.nil?} encode=#{!codec.encoder.nil?}#{opts}>"
           end
         end
       end
