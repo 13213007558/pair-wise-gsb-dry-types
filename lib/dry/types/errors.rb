@@ -62,6 +62,68 @@ module Dry
       def meta = errors.map(&:meta)
     end
 
+    class IntersectionError < CoercionError
+      STAGE_VALIDATION = :validation
+      STAGE_MERGE = :merge
+
+      attr_reader :stage, :path, :left, :right, :cause_error
+
+      def initialize(message, stage:, path: EMPTY_ARRAY, left: Undefined, right: Undefined,
+                     cause_error: nil, meta: Undefined)
+        @stage = stage
+        @path = path
+        @left = left
+        @right = right
+        @cause_error = cause_error
+
+        super(message, meta: meta)
+      end
+    end
+
+    class IntersectionConflictError < IntersectionError
+      def initialize(path, left, right, reason = :mismatch)
+        location = path.empty? ? "$" : path.map(&:inspect).join("/")
+
+        super(
+          "intersection merge conflict at #{location}: #{reason} " \
+          "(left=#{left.inspect}, right=#{right.inspect})",
+          stage: STAGE_MERGE,
+          path: path,
+          left: left,
+          right: right,
+          meta: {reason: reason}
+        )
+      end
+    end
+
+    class IntersectionValidationError < IntersectionError
+      def initialize(path, left, right, error)
+        location = path.empty? ? "$" : path.map(&:inspect).join("/")
+        meta = error.respond_to?(:meta) ? error.meta : Undefined
+
+        super(
+          "intersection result failed validation at #{location}: #{error.message}",
+          stage: STAGE_VALIDATION,
+          path: path,
+          left: left,
+          right: right,
+          cause_error: error,
+          meta: meta
+        )
+      end
+    end
+
+    class IntersectionUnverifiableError < CoercionError
+      attr_reader :type
+
+      def initialize(type, reason = nil)
+        @type = type
+        message = "cannot enable strict intersection mode for #{type.inspect}"
+        message += ": #{reason}" if reason
+        super(message)
+      end
+    end
+
     class SchemaError < CoercionError
       # @return [String, Symbol]
       attr_reader :key

@@ -48,10 +48,14 @@ module Dry
       #
       # @api private
       def initialize(left, right, **options)
-        super
         @left, @right = left, right
+        super
+        after_initialize
         freeze
       end
+
+      # @api private
+      def after_initialize = nil
 
       # @return [String]
       #

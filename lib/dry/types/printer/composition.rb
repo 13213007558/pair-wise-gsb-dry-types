@@ -14,7 +14,8 @@ module Dry
 
         def visit(composition)
           visit_constructors(composition) do |constructors|
-            @printer.visit_options(composition.options, composition.meta) do |opts|
+            options = composition.options.except(:merge_registry)
+            @printer.visit_options(options, composition.meta) do |opts|
               yield "#{@composition_class.composition_name}<#{constructors}#{opts}>"
             end
           end

@@ -242,4 +242,250 @@ RSpec.describe Dry::Types::Intersection do
       end
     end
   end
+
+  describe "strict mode" do
+    def schema(keys)
+      t::Nominal::Hash.schema(keys)
+    end
+
+    def counted(calls, name, type, &coercion)
+      type.constructor do |input|
+        calls[name] += 1
+        coercion.call(input)
+      end
+    end
+
+    it "merges complementary hash keys and keeps equal nested values" do
+      left = schema(a: t::Coercible::Integer)
+      right = schema(b: t::Coercible::String)
+      type = (left & right).strict
+
+      expect(type.call(a: "1", b: 2)).to eql(a: 1, b: "2")
+    end
+
+    it "requires array lengths to match" do
+      left = t.Array(t::Nominal::Any).constructor { |input| input }
+      right = t.Array(t::Nominal::Any).constructor { |input| input.first(1) }
+      type = (left & right).strict
+
+      expect { type.call([1, 2]) }.to raise_error(
+        Dry::Types::IntersectionConflictError
+      ) { |error|
+        expect(error.stage).to be(:merge)
+        expect(error.path).to eql([])
+        expect(error.left).to eql([1, 2])
+        expect(error.right).to eql([1])
+        expect(error.message).to include("array_length")
+      }
+    end
+
+    it "requires array positions to correspond" do
+      left = t.Array(t::Nominal::Any).constructor { |input| input }
+      right = t.Array(t::Nominal::Any).constructor { |input| input.map { 2 } }
+      type = (left & right).strict
+
+      expect { type.call([1]) }.to raise_error(
+        Dry::Types::IntersectionConflictError
+      ) { |error|
+        expect(error.path).to eql([0])
+        expect(error.left).to be(1)
+        expect(error.right).to be(2)
+      }
+    end
+
+    it "reports nested hash conflicts with both results" do
+      left = schema(a: t::Nominal::Hash.schema(b: t::Nominal::Any.constructor(&:to_i)))
+      right = schema(a: t::Nominal::Hash.schema(b: t::Nominal::Any.constructor { 2 }))
+      type = (left & right).strict
+
+      failure = type.try(a: {b: 1})
+
+      expect(failure).to be_failure
+      expect(failure.error).to be_a(Dry::Types::IntersectionConflictError)
+      expect(failure.error.stage).to be(:merge)
+      expect(failure.error.path).to eql(%i[a b])
+      expect(failure.error.left).to be(1)
+      expect(failure.error.right).to be(2)
+    end
+
+    it "does not choose one side for unequal scalars" do
+      default_type = t::Coercible::Integer & t::Nominal::String
+      strict_type = default_type.strict
+
+      expect(default_type.call("1")).to be(1)
+      expect { strict_type.call("1") }.to raise_error(
+        Dry::Types::IntersectionConflictError
+      ) { |error|
+        expect(error.stage).to be(:merge)
+        expect(error.left).to be(1)
+        expect(error.right).to eql("1")
+      }
+    end
+
+    it "evaluates each side exactly once" do
+      calls = Hash.new(0)
+      left = schema(a: counted(calls, :a, t::Nominal::Integer, &:to_i))
+      right = schema(b: counted(calls, :b, t::Nominal::String, &:to_s))
+      type = (left & right).strict
+
+      result = type.call(a: "1", b: 2)
+
+      expect(result).to eql(a: 1, b: "2")
+      expect(calls).to eql(a: 1, b: 1)
+
+      type.valid?(a: "1", b: 2)
+      expect(calls).to eql(a: 2, b: 2)
+    end
+
+    it "still evaluates the other side once when one side fails" do
+      calls = Hash.new(0)
+      left = counted(calls, :left, t::Strict::Integer) { _1 }
+      right = counted(calls, :right, t::Strict::Integer) { _1 }
+      type = (left & right).strict
+
+      result = type.try("1")
+
+      expect(result).to be_failure
+      expect(result.error).to be_a(Dry::Types::IntersectionValidationError)
+      expect(result.error.stage).to be(:validation)
+      expect(calls).to eql(left: 1, right: 1)
+    end
+
+    it "distinguishes merged values that fail a side constraint" do
+      calls = Hash.new(0)
+      left = schema(name: counted(calls, :name, t::Strict::String, &:to_s))
+      right = schema(active: t::Strict::Bool)
+      registry = Dry::Types::Intersection::MergeRegistry.new.register(
+        [left.pristine, right.pristine],
+        ->(left_result, right_result) {
+          left_result.merge(right_result).merge(name: 1)
+        }
+      )
+      type = (left & right).strict(registry: registry)
+
+      result = type.try(name: :ada, active: true)
+
+      expect(result).to be_failure
+      expect(result.error).to be_a(Dry::Types::IntersectionValidationError)
+      expect(result.error.stage).to be(:validation)
+      expect(result.error.path).to eql([:name])
+      expect(result.error.left).to eql(name: "ada")
+      expect(result.error.right).to eql(active: true)
+      expect(calls).to eql(name: 1)
+    end
+
+    it "supports registered mergers and side-effect-free result checkers" do
+      left = schema(first: t::Strict::String)
+      right = schema(last: t::Strict::String)
+      merger = ->(left_result, right_result) {
+        left_result.merge(right_result).merge(
+          full_name: "#{left_result.fetch(:first)} #{right_result.fetch(:last)}"
+        )
+      }
+      checker = ->(result) { result.fetch(:full_name).include?(" ") }
+      registry = Dry::Types::Intersection::MergeRegistry
+        .new
+        .register([left.pristine, right.pristine], merger, checker)
+      type = (left & right).strict(registry: registry)
+
+      expect(type.call(first: "Ada", last: "Lovelace")).to eql(
+        first: "Ada", last: "Lovelace", full_name: "Ada Lovelace"
+      )
+    end
+
+    it "supports the process-wide merger registry" do
+      left = t::Nominal::Hash.schema(first: t::Strict::String)
+      right = t::Nominal::Hash.schema(last: t::Strict::String)
+      registry_class = Dry::Types::Intersection::MergeRegistry
+      pair = [left.pristine, right.pristine]
+
+      registry_class.register(pair) do |left_result, right_result|
+        left_result.merge(right_result).merge(full_name: "global merger")
+      end
+
+      type = (left & right).strict
+
+      expect(type.call(first: "Ada", last: "Lovelace")).to include(
+        full_name: "global merger"
+      )
+    ensure
+      registry_class.unregister(pair)
+    end
+
+    it "uses a custom merger across nested strict intersections" do
+      left = t::Nominal::Hash.schema(first: t::Strict::String)
+      middle = t::Nominal::Hash.schema(last: t::Strict::String)
+      right = t::Nominal::Hash.schema(active: t::Strict::Bool)
+      registry = Dry::Types::Intersection::MergeRegistry
+        .new
+        .register([(left & middle).strict, right]) do |left_result, right_result|
+          left_result.merge(right_result).merge(nested_custom: true)
+        end
+      type = ((left & middle).strict & right).strict(registry: registry)
+
+      expect(type.call(first: "Ada", last: "Lovelace", active: true)).to include(
+        nested_custom: true
+      )
+    end
+
+    it "reports a failed custom checker as a merge conflict" do
+      left = schema(first: t::Strict::String)
+      right = schema(last: t::Strict::String)
+      registry = Dry::Types::Intersection::MergeRegistry
+        .new
+        .register(
+          [left.pristine, right.pristine],
+          ->(left_result, right_result) { left_result.merge(right_result) },
+          ->(_result) { false }
+        )
+      type = (left & right).strict(registry: registry)
+
+      expect { type.call(first: "Ada", last: "Lovelace") }.to raise_error(
+        Dry::Types::IntersectionConflictError
+      ) { |error|
+        expect(error.stage).to be(:merge)
+        expect(error.message).to include("custom_checker")
+      }
+    end
+
+    it "rejects types whose pure constraints cannot be recovered" do
+      type = t::Strict::Integer.constructor(&:to_i).lax & t::Strict::String
+
+      expect { type.strict }.to raise_error(
+        Dry::Types::IntersectionUnverifiableError, /lax types/
+      )
+    end
+
+    it "is associative for nested intersections without custom mergers" do
+      calls = Hash.new(0)
+      first = schema(a: counted(calls, :a, t::Nominal::Integer, &:to_i))
+      second = schema(b: counted(calls, :b, t::Nominal::String, &:to_s))
+      third = schema(c: counted(calls, :c, t::Nominal::String, &:to_s))
+
+      left_associated = ((first & second).strict & third).strict
+      right_associated = (first & (second & third).strict).strict
+      input = {a: "1", b: 2, c: true}
+
+      expect(left_associated.call(input)).to eql(a: 1, b: "2", c: "true")
+      expect(calls).to eql(a: 1, b: 1, c: 1)
+      expect(right_associated.call(input)).to eql(a: 1, b: "2", c: "true")
+      expect(calls).to eql(a: 2, b: 2, c: 2)
+    end
+
+    it "preserves the non-strict default behavior" do
+      type = t.Array(t::Nominal::Any) & t.Array(t::Nominal::Any)
+
+      expect(type.call([1, 2])).to eql([1, 2])
+      expect(type.strict).not_to equal(type)
+    end
+
+    it "hides the merger registry in its string representation" do
+      type = (t::Nominal::String & t::Nominal::Integer).strict
+
+      expect(type.to_s).to eql(
+        "#<Dry::Types[Intersection<Nominal<String> & Nominal<Integer> " \
+        "options={strict: true}>]>"
+      )
+    end
+  end
 end
