@@ -3,6 +3,7 @@
 require "dry/core/equalizer"
 require "dry/types/options"
 require "dry/types/meta"
+require "dry/types/intersection/strict"
 
 module Dry
   module Types
@@ -20,7 +21,11 @@ module Dry
       #
       # @api private
       def call_unsafe(input)
-        merge_results(left.call_unsafe(input), right.call_unsafe(input))
+        if strict?
+          Strict.new(self, input).call
+        else
+          merge_results(left.call_unsafe(input), right.call_unsafe(input))
+        end
       end
 
       # @param [Object] input
@@ -28,18 +33,46 @@ module Dry
       # @return [Object]
       #
       # @api private
-      def call_safe(input, &) = try_sides(input, &).input
+      def call_safe(input, &block)
+        result = try(input)
+        result.success? ? result.input : yield(result.input)
+      end
 
       # @param [Object] input
       #
       # @api public
       def try(input)
-        try_sides(input) do |failure|
-          if block_given?
-            yield(failure)
-          else
-            failure
+        if strict?
+          begin
+            Result::Success.new(Strict.new(self, input).call)
+          rescue Strict::Error => failure
+            failure_result = Result::Failure.new(input, failure)
+            block_given? ? yield(failure_result) : failure_result
           end
+        else
+          try_sides(input) do |failure|
+            block_given? ? yield(failure) : failure
+          end
+        end
+      end
+
+      def strict(strict = true)
+        with(strict: strict)
+      end
+
+      def strict? = options.fetch(:strict, false)
+
+      def self.register_merger(...) = Strict.register_merger(...)
+
+      def with(**new_options)
+        type = self.class.new(left, right, **options, meta: meta, **new_options)
+        type.assert_strict_support! if type.strict? && new_options.key?(:strict)
+        type
+      end
+
+      def assert_strict_support!
+        unless Strict.supported_combination?(left, right)
+          raise Strict::UnsupportedCombination.new(left, right)
         end
       end
 

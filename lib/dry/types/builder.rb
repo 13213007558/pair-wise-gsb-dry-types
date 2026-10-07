@@ -36,6 +36,15 @@ module Dry
       # @api private
       def &(other) = compose(other, Intersection)
 
+      # Compose two types into a strict Intersection type
+      #
+      # @param [Type] other
+      #
+      # @return [Intersection, Intersection::Constrained]
+      #
+      # @api public
+      def strict_intersection(other) = compose(other, Intersection).strict
+
       # Compose two types into an Implication type
       #
       # @param [Type] other

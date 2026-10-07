@@ -230,6 +230,191 @@ RSpec.describe Dry::Types::Intersection do
     end
   end
 
+  describe "strict mode" do
+    subject(:type) { (left & right).strict }
+
+    let(:left) { t.Hash(foo: t::Strict::Integer) }
+    let(:right) { t.Hash(bar: t::Strict::Integer) }
+
+    it "keeps the non-strict intersection behavior unchanged" do
+      loose = t::Nominal::String & t::Nominal::Integer
+
+      expect(loose.call(312)).to eql(312)
+      expect(loose.strict).not_to eql(loose)
+    end
+
+    it "merges complementary hash keys" do
+      expect(type.call(foo: 1, bar: 2)).to eql(foo: 1, bar: 2)
+    end
+
+    it "can be built directly" do
+      expect(left.strict_intersection(right).call(foo: 1, bar: 2)).to eql(foo: 1, bar: 2)
+    end
+
+    it "requires values on matching paths to be equal" do
+      left = t.Hash(foo: t::Nominal::Integer.constructor(->(value) { value.to_i }))
+      right = t.Hash(foo: t::Nominal::Integer.constructor(->(value) { value.to_i.succ }))
+      mismatch = (left & right).strict
+
+      expect {
+        mismatch.call(foo: 1)
+      }.to raise_error(described_class::Strict::MergeConflict) do |error|
+        expect(error.stage).to eql(:merge)
+        expect(error.path).to eql(%i[foo])
+        expect(error.left).to eql(1)
+        expect(error.right).to eql(2)
+      end
+    end
+
+    it "requires array lengths to match" do
+      left = t::Nominal::Array.constructor(->(_) { [1, 2] })
+      right = t::Nominal::Array.constructor(->(_) { [1] })
+      mismatch = (left & right).strict
+
+      expect {
+        mismatch.call(0)
+      }.to raise_error(described_class::Strict::MergeConflict) do |error|
+        expect(error.stage).to eql(:merge)
+        expect(error.path).to eql([])
+        expect(error.left).to eql([1, 2])
+        expect(error.right).to eql([1])
+      end
+    end
+
+    it "requires array elements to correspond by position" do
+      left = t::Nominal::Array.constructor(->(_) { [1, 2] })
+      right = t::Nominal::Array.constructor(->(_) { [1, 3] })
+      mismatch = (left & right).strict
+
+      expect {
+        mismatch.call(0)
+      }.to raise_error(described_class::Strict::MergeConflict) do |error|
+        expect(error.path).to eql([1])
+        expect(error.left).to eql(2)
+        expect(error.right).to eql(3)
+      end
+    end
+
+    it "distinguishes type validation failures from merge conflicts" do
+      invalid = t.Hash(foo: t::Strict::Integer) & t.Hash(bar: t::Strict::Integer)
+
+      expect {
+        invalid.strict.call(foo: "1", bar: 2)
+      }.to raise_error(described_class::Strict::TypeValidationError) do |error|
+        expect(error.stage).to eql(:type_validation)
+        expect(error.path).to eql([])
+        expect(error.left).to eql(foo: "1")
+        expect(error.right).to eql(bar: 2)
+      end
+    end
+
+    it "evaluates side constructors once without replaying them for validation" do
+      calls = []
+      counted = ->(label) {
+        ->(input) {
+          calls << label
+          input
+        }
+      }
+      left = t.Hash(foo: t::Nominal::Integer.constructor(counted.call(:left)))
+      right = t.Hash(bar: t::Nominal::Integer.constructor(counted.call(:right)))
+
+      result = (left & right).strict.call(foo: 1, bar: 2)
+
+      expect(result).to eql(foo: 1, bar: 2)
+      expect(calls).to eql(%i[left right])
+    end
+
+    it "is order independent for nested conflict-free combinations" do
+      first = t.Hash(foo: t::Nominal::Integer)
+      second = t.Hash(bar: t::Nominal::Integer)
+      third = t.Hash(baz: t::Nominal::Integer)
+
+      left_associated = ((first & second).strict & third).strict
+      right_associated = (first & (second & third).strict).strict
+
+      input = {foo: 1, bar: 2, baz: 3}
+
+      expect(left_associated.call(input)).to eql(input)
+      expect(right_associated.call(input)).to eql(input)
+    end
+
+    it "returns a failure result from #try without raising" do
+      result = type.try(foo: 1, bar: "2")
+
+      expect(result).to be_failure
+      expect(result.error).to be_a(described_class::Strict::TypeValidationError)
+    end
+
+    it "rejects combinations that cannot be checked without side effects" do
+      exotic = Class.new do
+        include Dry::Types::Type
+
+        def try(input) = Dry::Types::Result::Success.new(input)
+      end.new
+
+      expect {
+        (t::Nominal::Any & exotic).strict
+      }.to raise_error(described_class::Strict::UnsupportedCombination)
+    end
+
+    describe "custom mergers" do
+      it "uses the registered result and a side-effect free check" do
+        left_marker = Module.new
+        right_marker = Module.new
+        left_type = Dry::Types::Nominal.new(left_marker).constructor(->(_) { left_marker })
+        right_type = Dry::Types::Nominal.new(right_marker).constructor(->(_) { right_marker })
+
+        described_class::Strict.register_merger(
+          left_type,
+          right_type,
+          ->(_left, _right) { ::Object.new.extend(left_marker, right_marker) },
+          check: ->(value) { value.is_a?(left_marker) && value.is_a?(right_marker) }
+        )
+
+        merged = (left_type & right_type).strict.call(:both)
+
+        expect(merged).to be_a(left_marker)
+        expect(merged).to be_a(right_marker)
+      end
+
+      it "still validates the merged result against pure constraints" do
+        marker = Module.new
+        marker_type = Dry::Types::Nominal.new(marker)
+
+        described_class::Strict.register_merger(
+          marker_type,
+          t::Nominal::Integer,
+          ->(_left, _right) { Object.new }
+        )
+
+        expect {
+          (marker_type & t::Nominal::Integer).strict.call(1)
+        }.to raise_error(described_class::Strict::TypeValidationError)
+      end
+
+      it "turns a failed custom check into a type validation error" do
+        left_marker = Module.new
+        right_marker = Module.new
+        left_type = Dry::Types::Nominal.new(left_marker).constructor(->(_) { left_marker })
+        right_type = Dry::Types::Nominal.new(right_marker).constructor(->(_) { right_marker })
+
+        described_class::Strict.register_merger(
+          left_type,
+          right_type,
+          ->(left, _right) { left },
+          check: ->(_value) { false }
+        )
+
+        expect {
+          (left_type & right_type).strict.call(:both)
+        }.to raise_error(described_class::Strict::TypeValidationError) do |error|
+          expect(error.stage).to eql(:custom_check)
+        end
+      end
+    end
+  end
+
   describe "#meta" do
     context "optional types" do
       let(:meta) { {foo: :bar} }
