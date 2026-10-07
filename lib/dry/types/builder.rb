@@ -106,7 +106,7 @@ module Dry
         value = Undefined.default(input, block)
         type = Default[value].new(self, value)
 
-        if !type.callable? && !valid?(value)
+        if !type.callable? && !valid_default?(value)
           raise ConstraintError.new(
             "default value #{value.inspect} violates constraints",
             value
@@ -173,7 +173,7 @@ module Dry
           raise ::ArgumentError, "fallback value or a block must be given"
         end
 
-        if !block_given? && !valid?(value)
+        if !block_given? && !valid_default?(value)
           raise ConstraintError.new(
             "fallback value #{value.inspect} violates constraints",
             value
@@ -203,7 +203,42 @@ module Dry
         end
       end
 
+      # Turn a type into a codec by declaring the external representation
+      # type and pairing a decoder with an encoder
+      #
+      # @param [Type, Class] external external representation type
+      # @param [#call] encoder maps internal values to the external representation
+      # @param [#call, nil] decoder maps external representations to internal values
+      # @param [#call, nil] block decoder
+      #
+      # @return [Codec]
+      #
+      # @api public
+      def codec(external:, encoder:, decoder: nil, &block)
+        Codec.new(self, external: external, encoder: encoder, fn: decoder || block)
+      end
+
+      # Tag the type so sum types can use the tag to pick an encoding branch
+      # when more than one branch accepts the value
+      #
+      # @param [Object] tag tag value, must not be nil
+      # @param [Symbol] key hash key or method name used to read the tag from a value
+      #
+      # @return [Type]
+      #
+      # @api public
+      def tagged(tag, key: :type) = with(tag: tag, tag_key: key)
+
       private
+
+      # Whether a value can be used as a default (or fallback) for the type.
+      # Codec types override this to check internal values against the
+      # internal constraint
+      #
+      # @return [Boolean]
+      #
+      # @api private
+      def valid_default?(value) = valid?(value)
 
       # @api private
       def compose(other, composition_class)

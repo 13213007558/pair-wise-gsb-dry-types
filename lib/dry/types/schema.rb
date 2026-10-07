@@ -239,6 +239,68 @@ module Dry
         name_key_map.key?(name)
       end
 
+      # Encode a hash of internal values to its external representation
+      #
+      # Missing keys are handled like in {#call}: defaults are evaluated and
+      # encoded, keys that are not required are skipped and a {CodecError}
+      # is raised for the rest
+      #
+      # @param [Hash] hash
+      #
+      # @option options [Boolean] :skip_missing If true don't raise error on missing keys
+      # @option options [Boolean] :resolve_defaults If false default values
+      #                                             won't be evaluated for missing keys
+      #
+      # @return [Hash{Symbol => Object}]
+      #
+      # @api public
+      def encode(hash, options = EMPTY_HASH)
+        unless primitive?(hash)
+          raise CodecError.new("#{hash.inspect} must be a Hash", direction: :encode)
+        end
+
+        result = {}
+
+        keys.each do |key|
+          if hash.key?(key.name)
+            result[key.name] = encode_key(key, hash[key.name])
+          elsif key.default? && options.fetch(:resolve_defaults, true)
+            result[key.name] = encode_key(key, key.call_unsafe(Undefined))
+          elsif key.required? && !options.fetch(:skip_missing, false)
+            raise CodecError.new(
+              "#{key.name.inspect} is missing in Hash input",
+              direction: :encode,
+              path: [key.name]
+            )
+          end
+        end
+
+        if strict? && (hash.keys.map(&transform_key) - name_key_map.keys).any?
+          raise unexpected_keys(hash.keys)
+        end
+
+        result
+      end
+
+      # Whether a hash holds valid internal values for every key
+      #
+      # @param [Object] input
+      #
+      # @return [Boolean]
+      #
+      # @api public
+      def accepts_encoding?(input)
+        return false unless primitive?(input)
+
+        keys.all? do |key|
+          if input.key?(key.name)
+            key.type.accepts_encoding?(input[key.name])
+          else
+            key.default? || !key.required?
+          end
+        end
+      end
+
       # Fetch key type by a key name
       #
       # Behaves as ::Hash#fetch
@@ -326,6 +388,8 @@ module Dry
           if type
             begin
               result[k] = type.call_unsafe(value)
+            rescue CodecError => exception
+              raise exception.prepend(type.name)
             rescue ConstraintError => exception
               raise SchemaError.new(type.name, value, exception.result)
             rescue CoercionError => exception
@@ -402,6 +466,17 @@ module Dry
       # @api private
       def missing_key(key)
         MissingKeyError.new(key)
+      end
+
+      # Encode a single key value, preserving the key name in error paths
+      #
+      # @api private
+      def encode_key(key, value)
+        key.type.encode(value)
+      rescue CodecError => exception
+        raise exception.prepend(key.name)
+      rescue CoercionError => exception
+        raise CodecError.new(exception.message, direction: :encode, path: [key.name])
       end
     end
   end

@@ -11,6 +11,7 @@ module Dry
       MAPPING = {
         Nominal => :visit_nominal,
         Constructor => :visit_constructor,
+        Codec => :visit_codec,
         [
           Constrained,
           Constrained::Coercible
@@ -83,6 +84,25 @@ module Dry
 
             visit_options(options) do |opts|
               yield "Constructor<#{type} fn=#{fn}#{opts}>"
+            end
+          end
+        end
+      end
+
+      def visit_codec(codec)
+        visit(codec.type) do |type|
+          visit(codec.external) do |external|
+            visit_callable(codec.fn.fn) do |decoder|
+              visit_callable(codec.encoder.fn) do |encoder|
+                options = codec.options.dup
+                options.delete(:fn)
+                options.delete(:external)
+                options.delete(:encoder)
+
+                visit_options(options) do |opts|
+                  yield "Codec<#{type} <=> #{external} decoder=#{decoder} encoder=#{encoder}#{opts}>"
+                end
+              end
             end
           end
         end

@@ -48,6 +48,49 @@ module Dry
         end
       end
       alias_method :[], :call
+
+      # Encode an internal value to its external representation
+      #
+      # Plain types are one-directional: their external representation is the
+      # value itself, so the default encoding validates the value and returns
+      # it as-is. {Codec} types override this with an explicit encoder and
+      # {Constructor} types raise a {CodecError} because the inverse of an
+      # arbitrary constructor cannot be guessed
+      #
+      # @param [Object] input
+      #
+      # @return [Object]
+      #
+      # @api public
+      def encode(input) = call_unsafe(input)
+
+      # Safe encoding attempt, mirroring {#try} for the encoding direction
+      #
+      # @param [Object] input
+      #
+      # @yieldparam [Failure] failure
+      # @yieldreturn [Object]
+      #
+      # @return [Result::Success, Result::Failure]
+      # @return [Object] if encoding fails and a block is given
+      #
+      # @api public
+      def try_encode(input)
+        Result::Success.new(encode(input))
+      rescue CoercionError => exception
+        failure = Result::Failure.new(input, exception)
+        block_given? ? yield(failure) : failure
+      end
+
+      # Whether a value can be encoded by the type. Used by sum types to
+      # pick an encoding branch
+      #
+      # @param [Object] input
+      #
+      # @return [Boolean]
+      #
+      # @api public
+      def accepts_encoding?(input) = valid?(input)
     end
   end
 end

@@ -37,6 +37,19 @@ module Dry
       # @api public
       def try(input, &) = type.try(input, &)
 
+      # Encode a value, returning the input as-is when encoding fails
+      #
+      # @param [Object] input
+      #
+      # @return [Object]
+      #
+      # @api public
+      def encode(input)
+        type.encode(input)
+      rescue CoercionError
+        input
+      end
+
       # @see Nominal#to_ast
       #
       # @api public

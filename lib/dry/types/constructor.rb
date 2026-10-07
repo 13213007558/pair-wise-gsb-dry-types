@@ -95,6 +95,28 @@ module Dry
         type.try(value, &)
       end
 
+      # Constructors are one-way: the inverse of an arbitrary constructor
+      # cannot be guessed, so encoding always fails. Use {Codec} to pair
+      # a decoder with an explicit encoder
+      #
+      # @raise [CodecError]
+      #
+      # @api public
+      def encode(_input)
+        raise CodecError.new(
+          "cannot encode through a one-way constructor, " +
+            "use Dry::Types::Codec to pair decoding with encoding",
+          direction: :encode
+        )
+      end
+
+      # One-way constructors never accept values for encoding
+      #
+      # @return [false]
+      #
+      # @api public
+      def accepts_encoding?(_input) = false
+
       # Build a new constructor by appending a block to the coercion function
       #
       # @param [#call, nil] new_fn

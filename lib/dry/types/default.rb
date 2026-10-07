@@ -113,6 +113,31 @@ module Dry
         end
       end
 
+      # Encode an internal value through the wrapped type, evaluating
+      # the default when no value is given
+      #
+      # @param [Object] input
+      #
+      # @return [Object]
+      #
+      # @api public
+      def encode(input = Undefined)
+        if input.equal?(Undefined)
+          type.encode(evaluate)
+        else
+          type.encode(input)
+        end
+      end
+
+      # @param [Object] input
+      #
+      # @return [Boolean]
+      #
+      # @api public
+      def accepts_encoding?(input = Undefined)
+        Undefined.equal?(input) || type.accepts_encoding?(input)
+      end
+
       # @return [false]
       #
       # @api private

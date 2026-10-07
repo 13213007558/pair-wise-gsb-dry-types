@@ -89,6 +89,27 @@ module Dry
         end
       end
 
+      # Build a codec type pairing a decoder with an encoder
+      #
+      # @example
+      #   Types::Decimal = Types.Codec(
+      #     Types.Instance(BigDecimal),
+      #     external: Types::String,
+      #     encoder: -> decimal { decimal.to_s("F") },
+      #     decoder: -> string { BigDecimal(string) }
+      #   )
+      #
+      # @param [Type, Class] internal internal type or primitive class
+      # @param [Type, Class] external external representation type or primitive class
+      # @param [#call] encoder maps internal values to the external representation
+      # @param [#call, nil] decoder maps external representations to internal values
+      # @param [#call, nil] block decoder
+      #
+      # @return [Dry::Types::Codec]
+      def Codec(internal, external:, encoder:, decoder: nil, &block)
+        Dry::Types::Codec.new(internal, external: external, encoder: encoder, fn: decoder || block)
+      end
+
       # Build a nominal type
       #
       # @param [Class] klass

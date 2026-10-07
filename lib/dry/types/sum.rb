@@ -37,6 +37,82 @@ module Dry
         left.call_safe(input) { right.call_unsafe(input) }
       end
 
+      # Encode an internal value to its external representation
+      #
+      # Unlike decoding, encoding never relies on branch order: exactly one
+      # branch must accept the value. When multiple branches accept it, the
+      # branches must be tagged (see Builder#tagged) and the value must carry
+      # a matching tag, otherwise an {AmbiguousEncodingError} is raised
+      #
+      # @param [Object] input
+      #
+      # @return [Object]
+      #
+      # @api public
+      def encode(input)
+        accepting = encode_branches.select { |branch| branch.accepts_encoding?(input) }
+
+        if accepting.empty?
+          raise CodecError.new(
+            "#{input.inspect} cannot be encoded by any branch of the sum type",
+            direction: :encode
+          )
+        elsif accepting.one?
+          accepting.first.encode(input)
+        else
+          tagged = accepting.select { |branch| self.class.tagged_branch?(branch, input) }
+
+          if tagged.one?
+            tagged.first.encode(input)
+          else
+            raise AmbiguousEncodingError.new(input, accepting)
+          end
+        end
+      end
+
+      # @param [Object] input
+      #
+      # @return [Boolean]
+      #
+      # @api public
+      def accepts_encoding?(input)
+        encode_branches.any? { |branch| branch.accepts_encoding?(input) }
+      end
+
+      # Flattened list of non-sum branches
+      #
+      # @return [Array<Type>]
+      #
+      # @api private
+      def encode_branches
+        [left, right].flat_map do |branch|
+          branch.is_a?(Sum) ? branch.encode_branches : branch
+        end
+      end
+
+      # Whether a branch is tagged and the value carries a matching tag
+      #
+      # @return [Boolean]
+      #
+      # @api private
+      def self.tagged_branch?(branch, input)
+        return false unless branch.respond_to?(:options)
+
+        tag = branch.options[:tag]
+        return false if tag.nil?
+
+        key = branch.options.fetch(:tag_key, :type)
+
+        value =
+          if input.is_a?(::Hash)
+            input[key]
+          elsif input.respond_to?(key)
+            input.public_send(key)
+          end
+
+        !value.nil? && value == tag
+      end
+
       # @param [Object] input
       #
       # @return [Object]

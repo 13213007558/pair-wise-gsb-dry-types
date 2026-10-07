@@ -9,6 +9,16 @@ and this project adheres to [Break Versioning](https://www.taoensso.com/break-ve
 
 ### Added
 
+- Add `Dry::Types::Codec`, a type that pairs decoding (external representation
+  to internal value) with explicit encoding (internal value to external
+  representation). Codecs declare external and internal constraints, validate
+  in both directions, and compose with arrays, hash schemas and sum types.
+  Nested errors carry the path and the direction of the failed transformation.
+  Sum types never rely on branch order for encoding: when multiple branches
+  accept a value, an explicit tag (see `Builder#tagged`) is required, otherwise
+  an `AmbiguousEncodingError` is raised. Plain types encode as validated
+  identity and one-way constructors raise a `CodecError` on `#encode`
+
 ### Changed
 
 ### Deprecated

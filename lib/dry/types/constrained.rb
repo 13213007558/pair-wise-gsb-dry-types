@@ -49,6 +49,33 @@ module Dry
         end
       end
 
+      # Encode an internal value through the wrapped type after checking
+      # it against the rule
+      #
+      # @param [Object] input
+      #
+      # @return [Object]
+      #
+      # @api public
+      def encode(input)
+        result = rule.(input)
+
+        if result.success?
+          type.encode(input)
+        else
+          raise ConstraintError.new(result, input)
+        end
+      end
+
+      # @param [Object] input
+      #
+      # @return [Boolean]
+      #
+      # @api public
+      def accepts_encoding?(input)
+        rule[input] && type.accepts_encoding?(input)
+      end
+
       # Safe coercion attempt. It is similar to #call with a
       # block given but returns a Result instance with metadata
       # about errors (if any).

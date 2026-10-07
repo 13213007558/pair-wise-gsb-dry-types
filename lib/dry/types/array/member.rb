@@ -29,7 +29,12 @@ module Dry
         def call_unsafe(input)
           if primitive?(input)
             input.each_with_object([]) do |el, output|
-              coerced = member.call_unsafe(el)
+              coerced =
+                begin
+                  member.call_unsafe(el)
+                rescue CodecError => exception
+                  raise exception.prepend(output.size)
+                end
 
               output << coerced unless Undefined.equal?(coerced)
             end
@@ -74,7 +79,16 @@ module Dry
           if primitive?(input)
             output = []
 
-            result = input.map { |el| member.try(el) }
+            result = input.map.with_index do |el, index|
+              member_result = member.try(el)
+
+              if member_result.failure? && member_result.error.is_a?(CodecError)
+                member_result.error.prepend(index)
+              end
+
+              member_result
+            end
+
             result.each do |r|
               output << r.input unless Undefined.equal?(r.input)
             end
@@ -90,6 +104,41 @@ module Dry
             failure = failure(input, CoercionError.new("#{input} is not an array"))
             block ? yield(failure) : failure
           end
+        end
+
+        # Encode an array of internal values to its external representation
+        #
+        # @param [Array] input
+        #
+        # @return [Array]
+        #
+        # @api public
+        def encode(input)
+          if primitive?(input)
+            input.each_with_object([]) do |el, output|
+              encoded =
+                begin
+                  member.encode(el)
+                rescue CodecError => exception
+                  raise exception.prepend(output.size)
+                rescue CoercionError => exception
+                  raise CodecError.new(exception.message, direction: :encode, path: [output.size])
+                end
+
+              output << encoded
+            end
+          else
+            raise CodecError.new("#{input.inspect} must be an Array", direction: :encode)
+          end
+        end
+
+        # @param [Object] input
+        #
+        # @return [Boolean]
+        #
+        # @api public
+        def accepts_encoding?(input)
+          primitive?(input) && input.all? { |el| member.accepts_encoding?(el) }
         end
 
         # Build a lax type

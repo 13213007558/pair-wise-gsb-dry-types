@@ -134,5 +134,74 @@ module Dry
       end
       alias_method :to_s, :message
     end
+
+    # Error raised when a {Codec} fails to decode an external representation
+    # or to encode an internal value
+    #
+    # The error carries the direction of the failed transformation and the
+    # path to the failing value within nested structures
+    #
+    class CodecError < CoercionError
+      # @return [:decode, :encode] direction of the failed transformation
+      attr_reader :direction
+
+      # @return [Array<Symbol, Integer>] path to the failing value,
+      #   ordered from the outermost to the innermost segment
+      attr_reader :path
+
+      # @param [String] message
+      # @param [:decode, :encode] direction
+      # @param [Array<Symbol, Integer>] path
+      def initialize(message, direction:, path: [], meta: Undefined, backtrace: Undefined)
+        @direction = direction
+        @path = path
+        super(message, meta: meta, backtrace: backtrace)
+      end
+
+      # Prepend a path segment. Container types (arrays, schemas) use this
+      # when re-raising errors coming from their members
+      #
+      # @param [Symbol, Integer] segment
+      #
+      # @return [CodecError] self
+      #
+      # @api private
+      def prepend(segment)
+        @path = [segment, *path]
+        self
+      end
+
+      # @return [String]
+      def message
+        "#{direction} failed at #{location}: #{super}"
+      end
+
+      private
+
+      # @return [String]
+      #
+      # @api private
+      def location
+        path.reduce("$".dup) do |location, segment|
+          location << (segment.is_a?(::Integer) ? "[#{segment}]" : ".#{segment}")
+        end
+      end
+    end
+
+    # Raised when encoding a value through a sum type and more than one
+    # branch accepts it. Tag the branches (see Builder#tagged) and provide
+    # the tag in the value to disambiguate
+    #
+    class AmbiguousEncodingError < CodecError
+      # @param [Object] input
+      # @param [Array<Type>] branches accepting branches
+      def initialize(input, branches)
+        super(
+          "#{input.inspect} is accepted by #{branches.size} branches of the sum type, " +
+            "tag the branches and the value to disambiguate",
+          direction: :encode
+        )
+      end
+    end
   end
 end

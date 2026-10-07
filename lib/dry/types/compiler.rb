@@ -31,6 +31,17 @@ module Dry
         primitive.constructor(compile_fn(fn))
       end
 
+      def visit_codec(node)
+        internal, external, decoder, encoder = node
+
+        Codec.new(
+          visit(internal),
+          external: visit(external),
+          encoder: compile_fn(encoder),
+          fn: compile_fn(decoder)
+        )
+      end
+
       def visit_lax(node)
         Types::Lax.new(visit(node))
       end
