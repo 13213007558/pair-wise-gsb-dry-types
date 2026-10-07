@@ -48,6 +48,27 @@ module Dry
         # @api public
         def try(input, &) = type.try(input, &)
 
+        # @return [Boolean]
+        #
+        # @api public
+        def codec? = type.codec?
+
+        # @return [Boolean]
+        #
+        # @api public
+        def decoder? = type.decoder?
+
+        # @return [Boolean]
+        #
+        # @api public
+        def encoder? = type.encoder?
+
+        # @api private
+        def decode_unsafe(input) = type.decode_unsafe(input)
+
+        # @api private
+        def encode_unsafe(input, **options) = type.encode_unsafe(input, **options)
+
         # Whether the key is required in schema input
         #
         # @return [Boolean]

@@ -73,6 +73,24 @@ module Dry
       # @api public
       def optional? = false
 
+      # Intersections and implications are not assumed to have an inverse.
+      # Sum defines its own codec discrimination rules.
+      #
+      # @return [false]
+      #
+      # @api public
+      def codec? = false
+
+      # @return [false]
+      #
+      # @api public
+      def decoder? = false
+
+      # @return [false]
+      #
+      # @api public
+      def encoder? = false
+
       # @param [Object] input
       #
       # @return [Object]

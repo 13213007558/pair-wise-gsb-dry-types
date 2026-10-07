@@ -62,6 +62,86 @@ module Dry
       def meta = errors.map(&:meta)
     end
 
+    # Raised when a codec cannot decode or encode a value
+    #
+    class CodecError < CoercionError
+      # @return [Array<Symbol, Integer, String>]
+      attr_reader :path
+
+      # @return [Symbol]
+      attr_reader :direction
+
+      # @return [String]
+      attr_reader :base_message
+
+      # @api private
+      def self.build(message, path: EMPTY_ARRAY, direction: nil, meta: Undefined)
+        new(message, path: path, direction: direction, meta: meta)
+      end
+
+      # @api private
+      def initialize(message, path: EMPTY_ARRAY, direction: nil, **options)
+        @path = path
+        @direction = direction
+        @base_message = message
+        super("#{direction_label}#{path_label}#{message}", **options)
+      end
+
+      # @api private
+      def with_path(prefix, direction = self.direction)
+        return self if self.direction == direction && path.first == prefix
+        return self if self.direction == direction && path.first.to_s == "#{prefix}"
+
+        self.class.new(
+          base_message,
+          path: [prefix, *path],
+          direction: direction,
+          meta: Undefined.equal?(meta) ? Undefined : meta
+        )
+      end
+
+      private
+
+      def direction_label
+        case direction
+        when :decode then "decode error: "
+        when :encode then "encode error: "
+        else EMPTY_STRING
+        end
+      end
+
+      def path_label
+        path.empty? ? EMPTY_STRING : "at #{path.map(&:inspect).join(".")}: "
+      end
+
+      def message_without_prefix
+        message
+          .sub(/\Adecode error: /, EMPTY_STRING)
+          .sub(/\Aencode error: /, EMPTY_STRING)
+          .sub(/\Aat (?:[^:]+): /, EMPTY_STRING)
+      end
+    end
+
+    # Raised when a sum codec cannot choose exactly one branch while encoding
+    #
+    class AmbiguousCodecError < CodecError
+      # @return [Array<Array>]
+      attr_reader :branches
+
+      # @api private
+      def initialize(message, branches: EMPTY_ARRAY, **options)
+        @branches = branches
+        super(message, **options)
+      end
+
+      # @api private
+      def with_path(prefix, direction = self.direction)
+        copy = super
+        copy.instance_variable_set(:@branches, branches)
+        copy
+      end
+    end
+
     class SchemaError < CoercionError
       # @return [String, Symbol]
       attr_reader :key

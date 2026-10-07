@@ -17,6 +17,18 @@ module Dry
 
       undef :constrained?, :meta, :optional?, :primitive, :primitive?, :default?, :name, :namespace
 
+      # Constructors are one-way unless an explicit codec is provided
+      #
+      # @return [false]
+      #
+      # @api public
+      def codec? = false
+
+      # @return [Boolean]
+      #
+      # @api public
+      def encoder? = false
+
       # @param [Builder, Object] input
       # @param [Hash] options
       # @param [#call, nil] block
@@ -147,6 +159,18 @@ module Dry
       # @return [Lax]
       # @api public
       def lax = Lax.new(constructor_type[type.lax, **options])
+
+      # Constructors only define input conversion; encode must be paired explicitly
+      #
+      # @raise [CodecError]
+      #
+      # @api private
+      def encode_unsafe(input, **)
+        raise CodecError.build(
+          "constructor is one-way; pair it in an explicit codec before encoding",
+          direction: :encode
+        )
+      end
 
       # Wrap the type with a proc
       #

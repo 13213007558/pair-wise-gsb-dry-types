@@ -10,6 +10,8 @@ module Dry
     class Printer
       MAPPING = {
         Nominal => :visit_nominal,
+        Codec => :visit_codec,
+        Codec::Tagged => :visit_tagged_codec,
         Constructor => :visit_constructor,
         [
           Constrained,
@@ -60,6 +62,22 @@ module Dry
       end
 
       def visit_any(_) = yield "Any"
+
+      def visit_codec(codec)
+        visit(codec.external) do |external|
+          visit(codec.internal) do |internal|
+            visit_options(EMPTY_HASH, codec.meta) do |opts|
+              yield "Codec<#{external} => #{internal}#{opts}>"
+            end
+          end
+        end
+      end
+
+      def visit_tagged_codec(codec)
+        visit(codec.type) do |type|
+          yield "Tagged<#{type} label=#{codec.label.inspect} key=#{codec.key.inspect}>"
+        end
+      end
 
       def visit_array(type)
         visit_options(EMPTY_HASH, type.meta) do |opts|

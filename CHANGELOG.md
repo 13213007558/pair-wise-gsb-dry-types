@@ -9,6 +9,10 @@ and this project adheres to [Break Versioning](https://www.taoensso.com/break-ve
 
 ### Added
 
+- Add explicit `Codec` types with paired decode/encode transformations,
+  recursive array and hash schema support, tagged sum branches, and path-aware
+  codec errors.
+
 ### Changed
 
 ### Deprecated

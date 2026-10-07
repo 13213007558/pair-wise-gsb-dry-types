@@ -69,6 +69,13 @@ module Dry
       # @api public
       def optional? = false
 
+      # Nominal types are identity codecs
+      #
+      # @return [Boolean]
+      #
+      # @api public
+      def codec? = true
+
       # @param [BasicObject] input
       #
       # @return [BasicObject]

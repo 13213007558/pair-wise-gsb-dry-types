@@ -159,6 +159,24 @@ module Dry
       alias_method :>>, :constructor
       alias_method :<<, :constructor
 
+      # Build a codec with explicit external and internal transformations
+      #
+      # @param [Type] internal
+      # @param [Type] external
+      # @param [#call,nil] decode
+      # @param [#call,nil] encode
+      #
+      # @return [Codec]
+      #
+      # @api public
+      def codec(first = Undefined, second = Undefined, decode: nil, encode: nil, &block)
+        external = second == Undefined ? self : second
+        internal = first == Undefined ? external : first
+        decoder = decode || block || Codec::IDENTITY
+        encoder = encode || Codec::IDENTITY
+        Codec.new(external, internal, decoder: decoder, encoder: encoder)
+      end
+
       # Use the given value on type mismatch
       #
       # @param [Object] value

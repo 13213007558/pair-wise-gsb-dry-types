@@ -54,6 +54,18 @@ module Dry
               ".default(value).enum(*values) instead"
       end
 
+      # Enums can map both input and output; round-trips are not guaranteed
+      #
+      # @return [false]
+      #
+      # @api public
+      def codec? = false
+
+      # @return [false]
+      #
+      # @api public
+      def encoder? = false
+
       # Check whether a value is in the enum
       alias_method :include?, :valid?
 

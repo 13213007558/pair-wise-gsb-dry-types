@@ -47,6 +47,18 @@ module Dry
       # @api public
       def lax = self
 
+      # Lax is a permissive one-way coercion wrapper
+      #
+      # @return [false]
+      #
+      # @api public
+      def codec? = false
+
+      # @return [false]
+      #
+      # @api public
+      def encoder? = false
+
       private
 
       # @param [Object, Dry::Types::Constructor] response

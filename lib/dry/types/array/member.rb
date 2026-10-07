@@ -92,6 +92,54 @@ module Dry
           end
         end
 
+        # @return [Boolean]
+        #
+        # @api public
+        def codec? = member.codec?
+
+        # @return [Boolean]
+        #
+        # @api public
+        def decoder? = member.decoder?
+
+        # @return [Boolean]
+        #
+        # @api public
+        def encoder? = member.encoder?
+
+        # @return [Boolean]
+        #
+        # @api private
+        def conforms_without_codec?(input, direction)
+          return false unless primitive?(input)
+
+          input.all? { |element| externally_conforms?(member, element) }
+        end
+
+        # @api private
+        def decode_unsafe(input)
+          unless primitive?(input)
+            raise CodecError.build("#{input.inspect} must be an array", direction: :decode)
+          end
+          input.each_with_index.map do |element, index|
+            member.decode_unsafe(element)
+          rescue CodecError => exception
+            raise exception.with_path(index, :decode)
+          end
+        end
+
+        # @api private
+        def encode_unsafe(input, **)
+          unless primitive?(input)
+            raise CodecError.build("#{input.inspect} must be an array", direction: :encode)
+          end
+          input.each_with_index.map do |element, index|
+            member.encode_unsafe(element)
+          rescue CodecError => exception
+            raise exception.with_path(index, :encode)
+          end
+        end
+
         # Build a lax type
         #
         # @return [Lax]
@@ -112,6 +160,20 @@ module Dry
 
         # @api private
         def constructor_type = ::Dry::Types::Array::Constructor
+
+        private
+
+        def externally_conforms?(type, value)
+          case type
+          when Codec then externally_conforms?(type.external, value)
+          when Schema then type.conforms_without_codec?(value, :encode)
+          when Array::Member then type.conforms_without_codec?(value, :encode)
+          when Default then externally_conforms?(type.type, value)
+          when Constrained then type.try(value).success?
+          when Nominal then type.primitive?(value)
+          else type.try(value).success?
+          end
+        end
       end
     end
   end

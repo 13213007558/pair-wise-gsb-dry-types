@@ -100,6 +100,21 @@ module Dry
       # @api public
       def constrained? = true
 
+      # @return [Boolean]
+      #
+      # @api public
+      def codec? = type.codec?
+
+      # @return [Boolean]
+      #
+      # @api public
+      def decoder? = type.decoder?
+
+      # @return [Boolean]
+      #
+      # @api public
+      def encoder? = type.encoder?
+
       # @param [Object] value
       #
       # @return [Boolean]

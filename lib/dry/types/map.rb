@@ -89,6 +89,18 @@ module Dry
       # @api public
       def constrained? = value_type.constrained?
 
+      # Maps coerce keys and values and are not assumed reversible
+      #
+      # @return [false]
+      #
+      # @api public
+      def codec? = false
+
+      # @return [false]
+      #
+      # @api public
+      def encoder? = false
+
       private
 
       # @api private

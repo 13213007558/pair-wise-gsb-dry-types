@@ -69,6 +69,21 @@ module Dry
       # @api public
       def default? = true
 
+      # @return [Boolean]
+      #
+      # @api public
+      def codec? = type.codec?
+
+      # @return [Boolean]
+      #
+      # @api public
+      def decoder? = type.decoder?
+
+      # @return [Boolean]
+      #
+      # @api public
+      def encoder? = type.encoder?
+
       # @param [Object] input
       #
       # @return [Result::Success]
@@ -113,10 +128,33 @@ module Dry
         end
       end
 
+      # @api private
+      def encode_unsafe(input, **)
+        if input.equal?(Undefined)
+          # Defaults complete missing external input; they have no key to remove
+          # when internal data does not provide a value.
+          raise CodecError.build(
+            "default values cannot be encoded from an undefined input",
+            direction: :encode
+          )
+        end
+
+        type.encode_unsafe(input)
+      end
+
       # @return [false]
       #
       # @api private
       def callable? = false
+
+      # @api private
+      def decode_unsafe(input = Undefined)
+        if input.equal?(Undefined)
+          evaluate
+        else
+          type.decode_unsafe(input)
+        end
+      end
     end
   end
 end

@@ -139,6 +139,94 @@ module Dry
       # rubocop:enable Metrics/AbcSize
       # rubocop:enable Metrics/PerceivedComplexity
 
+      # @return [Boolean]
+      #
+      # @api public
+      def codec? = keys.all? { |key| key.type.codec? }
+
+      # @return [Boolean]
+      #
+      # @api private
+      def conforms_without_codec?(input, direction)
+        return false unless primitive?(input)
+
+        shape_conforms = input.all? do |key, value|
+          name = @transform_key.(key)
+          schema_key = name_key_map[name]
+          (!schema_key.nil? || !strict?) && externally_conforms?(schema_key, value, direction)
+        end
+
+        return shape_conforms && encode_missing_keys_present?(input) if direction == :encode
+
+        shape_conforms && keys.all? do |key|
+          next true unless key.required?
+
+          input.key?(key.name) || key.default? || !key.type.decoder?
+        end
+      rescue StandardError
+        false
+      end
+
+      # @return [Boolean]
+      #
+      # @api public
+      def decoder? = keys.all? { |key| key.type.decoder? }
+
+      # @return [Boolean]
+      #
+      # @api public
+      def encoder? = keys.all? { |key| key.type.encoder? }
+
+      # @api private
+      def decode_unsafe(input)
+        unless primitive?(input)
+          raise CodecError.build("#{input.inspect} must be a hash", direction: :decode)
+        end
+
+        output = {}
+
+        input.each do |key, value|
+          name = @transform_key.(key)
+          schema_key = name_key_map[name]
+
+          if schema_key
+            output[name] = schema_key.type.decode_unsafe(value)
+          elsif strict?
+            raise CodecError.build(unexpected_keys(input.keys).message, direction: :decode)
+          end
+        rescue CodecError => exception
+          raise exception.with_path(binding.local_variable_get(:name), :decode)
+        end
+
+        decode_missing_keys(output)
+        output
+      end
+
+      # @api private
+      def encode_unsafe(input, **)
+        unless primitive?(input)
+          raise CodecError.build("#{input.inspect} must be a hash", direction: :encode)
+        end
+
+        output = {}
+
+        input.each do |key, value|
+          name = @transform_key.(key)
+          schema_key = name_key_map[name]
+
+          if schema_key
+            output[name] = schema_key.type.encode_unsafe(value)
+          elsif strict?
+            raise CodecError.build(unexpected_keys(input.keys).message, direction: :encode)
+          end
+        rescue CodecError => exception
+          raise exception.with_path(binding.local_variable_get(:name), :encode)
+        end
+
+        encode_missing_keys(output)
+        output
+      end
+
       # @param meta [Boolean] Whether to dump the meta to the AST
       #
       # @return [Array] An AST representation
@@ -402,6 +490,81 @@ module Dry
       # @api private
       def missing_key(key)
         MissingKeyError.new(key)
+      end
+
+      # @api private
+      def decode_missing_keys(output)
+        keys.each do |key|
+          next if output.key?(key.name)
+
+          if key.default?
+            output[key.name] = key.type.decode_unsafe(Undefined)
+          elsif key.required?
+            raise CodecError.build(missing_key(key.name).message, direction: :decode)
+          end
+        end
+      end
+
+      # @api private
+      def encode_missing_keys(output)
+        keys.each do |key|
+          next if output.key?(key.name)
+
+          if key.required?
+            raise CodecError.build(missing_key(key.name).message, direction: :encode)
+          end
+        end
+      end
+
+      # @api private
+      def assert_direction!(direction)
+        method_name = direction == :decode ? :decoder? : :encoder?
+        return if public_send(method_name)
+
+        raise CodecError.build(
+          "schema contains a type without a #{direction} codec",
+          direction: direction
+        )
+      end
+
+      def externally_conforms?(schema_key, value, direction)
+        return true if schema_key.nil?
+
+        externally_conforming_type?(external_type(schema_key.type, direction), value)
+      end
+
+      def external_type(type, direction)
+        case type
+        when Codec then type.external
+        when Codec::Tagged then external_type(type.type, direction)
+        when Default then external_type(type.type, direction)
+        else type
+        end
+      end
+
+      def externally_conforming_type?(type, value)
+        case type
+        when Schema
+          type.conforms_without_codec?(value, :encode)
+        when Array::Member
+          type.conforms_without_codec?(value, :encode)
+        when Codec
+          externally_conforming_type?(type.external, value)
+        when Default
+          externally_conforming_type?(type.type, value)
+        when ::Dry::Types::Constrained
+          type.try(value).success?
+        when Nominal
+          type.primitive?(value)
+        else
+          type.try(value).success?
+        end
+      end
+
+      def encode_missing_keys_present?(input)
+        keys.all? do |key|
+          input.key?(key.name) || (!key.required? && !key.default?)
+        end
       end
     end
   end
